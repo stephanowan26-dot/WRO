@@ -42,4 +42,4 @@ void loop() {
 
   delay(200);
 }
-this was our first camara code
+this was our first prototype code
