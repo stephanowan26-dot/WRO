@@ -1,152 +1,456 @@
+// ─────────────────────────────────────────────
+//  ROBOT DIAGNOSTICS & AUTONOMOUS DRIVING — PRE-FINAL
+//  WRO 2026 Future Engineers
+//
+//  Full servo range steering + closed-loop obstacle avoidance.
+//  This sketch is used for bench testing every subsystem (motors, servo,
+//  ultrasonic sensors, color sensor) individually via Serial commands,
+//  and also contains the autonomous wall-centering + obstacle avoidance
+//  driving logic ('go' command).
+//
+//  Note: this version does not yet include lap counting or the blue
+//  finish-line stop logic — those are handled in a separate module
+//  (lap_counter.h) that gets integrated into the final competition code.
+// ─────────────────────────────────────────────
+//  SERIAL COMMANDS (end with newline):
+//  d           -> read the 3 distances
+//  a           -> auto-print distances every 500ms (toggle)
+//  c           -> read color sensor once
+//  ca          -> auto-print color every 300ms (toggle, for calibration)
+//  m:f / m:b   -> motors forward / backward (at current speed)
+//  m:s         -> stop motors (also cancels 'go')
+//  v:<0-255>   -> motor PWM speed   e.g. v:200
+//  go          -> autonomous driving: wall-centers with L/R sensors and
+//                 avoids obstacles ahead
+//  s:<angle>   -> servo angle   e.g. s:90
+//  s:l/s:c/s:r -> servo left(0) / center(50) / right(180)
+//  ?           -> show menu
+// ─────────────────────────────────────────────
+
 #include <Servo.h>
 
-// ====== Pines ======
-const int SERVO_PIN = 6;
-const int FRONT_TRIG_PIN = 2;
-const int FRONT_ECHO_PIN = 3;
+// ── Servo ─────────────────────────────────────
+Servo steeringServo;
+#define SERVO_PIN     9
+#define SERVO_CENTER  50       // wheels straight
+#define SERVO_LEFT    0        // max left  (50 degrees of travel)
+#define SERVO_RIGHT   180      // max right (130 degrees of travel)
+// Travel is ASYMMETRIC. Every correction is calculated as a fraction of the
+// available travel on each side (see steerAngle), so a "half turn left"
+// matches a "half turn right" in feel even though the endpoints differ.
 
-// L298N (Arduino Mega: 7 y 12 son PWM)
-const int ENA = 7;
-const int IN1 = 8;
-const int IN2 = 9;
-const int ENB = 12;
-const int IN3 = 11;
-const int IN4 = 10;
+// ── Motor pins ────────────────────────────────
+#define ENA   12       // PWM on the Mega -> speed control
+#define IN1   11
+#define IN2   10
 
-// Piezo
-const int PIEZO_PIN = 26;
+// ── Ultrasonic sensor pins ────────────────────
+#define TRIG_F  30
+#define ECHO_F  32
+#define TRIG_L  24
+#define ECHO_L  22
+#define TRIG_R  50
+#define ECHO_R  52
 
-// ====== Config ======
-const int   CENTER_ANGLE   = 90;
-const int   LEFT_ANGLE     = 45;     // tu pedido
-const int   SPEED_FWD      = 110;    // recta
-const int   SPEED_TURN     = 95;     // al girar (más lento)
-const int   SPEED_BACK     = 90;     // al retroceder
-const long  THRESHOLD_CM   = 35;     // dispara a < 35 cm
+// pulseIn timeout for the ultrasonic sensors. 30000us is about 500cm, but it
+// slows the loop down when a sensor doesn't get an echo back. If the robot
+// reacts late to obstacles, lower this to 12000 (about 200cm, which is
+// plenty for the WRO track).
+#define ULTRA_TIMEOUT_US  30000UL
 
-// Tiempos (ajustables)
-const int BEEP_MS          = 200;
-const int BACK_MS          = 2500;    // retrocede un poco
-const int TURN_MS          = 2225;    // <-- giro de 2.0 segundos (exacto)
-const int STRAIGHTEN_MS    = 300;     
-const int COOLDOWN_MS      = 850;     // evita múltiples triggers seguidos
+// ── Color sensor (TCS3200) ────────────────────
+//  OE -> GND (always enabled), VCC -> 5V, GND -> GND
+#define CS_S0   34
+#define CS_S1   36
+#define CS_S2   38
+#define CS_S3   40
+#define CS_OUT  42
+#define CS_PULSE_TIMEOUT_US  25000UL
+#define CS_ORANGE_RATIO  1.40f   // blue/red ratio above this -> ORANGE
+#define CS_BLUE_RATIO    0.70f   // blue/red ratio below this -> BLUE
 
-// Estados para Serial Plotter (opcional)
-enum State { FWD=1, ALERT=2, BACK=3, TURN=4, STRAIGHTEN=5, IDLE=6 };
+// ── Obstacle avoidance (closed loop) ──────────
+#define AVOID_TRIGGER_CM  30     // front closer than this -> start avoiding
+#define AVOID_CLEAR_CM    45     // front farther than this -> passed it, straighten
+#define AVOID_PANIC_CM    12     // too close to turn -> reverse first
+#define AVOID_FRAC_MIN  0.33f    // minimum turn on detection (1/3 of travel)
+#define AVOID_FRAC_MAX  1.00f    // maximum turn (full lock on the chosen side)
+#define AVOID_REVERSE_MS 250     // short reverse pulse (lower to 150 if it hits behind)
+#define AVOID_TIMEOUT_MS 5000    // if it can't get clear, stop and report
 
-Servo myservo;
+// ── Continuous steering (anti zig-zag) ────────
+#define SIDE_OPEN_CM   100       // a side with no echo ("---") treated as this distance
+#define SIDE_CLAMP_CM   50       // ignore distances greater than this
+#define STEER_DEADBAND   6       // |left-right| below this (cm) -> go straight
+#define STEER_BAND_NEAR 15       // |diff| below this -> small correction
+#define STEER_BAND_FAR  30       // |diff| below this -> medium; beyond -> max
+#define STEER_FRAC_SMALL 0.17f   // travel fraction in the near band
+#define STEER_FRAC_MED   0.33f   // travel fraction in the medium band
+#define STEER_FRAC_MAX   0.50f   // cap on continuous correction (half lock)
 
-// ====== Motores ======
-void moveForward(int speedVal) {
-  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
-  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
-  analogWrite(ENA, speedVal);
-  analogWrite(ENB, speedVal);
-}
-void moveBackward(int speedVal) {
-  digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH);
-  digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);
-  analogWrite(ENA, speedVal);
-  analogWrite(ENB, speedVal);
-}
-void stopMotors() {
-  analogWrite(ENA, 0);
-  analogWrite(ENB, 0);
-}
+int  motorSpeed = 200;           // 0-255 PWM for ENA
 
-// ====== Ultrasonido ======
-long readDistanceOnceCm(int trigPin, int echoPin) {
-  digitalWrite(trigPin, LOW);  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH); delayMicroseconds(10);
+// ── State ─────────────────────────────────────
+bool autoDistance = false;
+unsigned long lastAutoRead = 0;
+bool autoColor = false;
+unsigned long lastColorRead = 0;
+bool driving = false;            // true while 'go' is active
+bool avoiding = false;           // true while an avoidance maneuver is running
+bool avoidRight = true;          // side chosen ON ENTRY (doesn't change mid-maneuver)
+unsigned long avoidStart = 0;
+
+// ─────────────────────────────────────────────
+//  Ultrasonic distance (cm), -1 if no echo
+// ─────────────────────────────────────────────
+float readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
-  long us = pulseIn(echoPin, HIGH, 30000UL); // timeout 30 ms
-  if (us == 0) return -1;
-  return (us * 34L) / 2000L; // ≈ cm
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, ULTRA_TIMEOUT_US);
+  if (duration == 0) return -1;
+
+  float dist = duration * 0.034 / 2.0;
+  if (dist > 400) return -1;
+  return dist;
 }
 
-// Detección “activa”: toma N lecturas rápidas y devuelve la mínima válida (la más cercana)
-long readDistanceFilteredCm(int trigPin, int echoPin, uint8_t samples = 3, uint8_t gap_ms = 12) {
-  long best = -1;
-  for (uint8_t i = 0; i < samples; i++) {
-    long d = readDistanceOnceCm(trigPin, echoPin);
-    if (d > 0 && (best < 0 || d < best)) best = d;
-    delay(gap_ms); // breve separación entre pings
-  }
-  return best; // -1 si todas fallaron
+void printDistances() {
+  float f = readDistance(TRIG_F, ECHO_F);
+  float l = readDistance(TRIG_L, ECHO_L);
+  float r = readDistance(TRIG_R, ECHO_R);
+
+  Serial.print("FRONT: ");
+  if (f < 0) Serial.print("---"); else { Serial.print(f, 1); Serial.print("cm"); }
+  Serial.print("   LEFT: ");
+  if (l < 0) Serial.print("---"); else { Serial.print(l, 1); Serial.print("cm"); }
+  Serial.print("   RIGHT: ");
+  if (r < 0) Serial.print("---"); else { Serial.print(r, 1); Serial.print("cm"); }
+  Serial.println();
 }
 
-void printState(State s, const char* msg) {
-  Serial.println(msg);
-  Serial.print("state:"); Serial.println((int)s); // para Serial Plotter
+// ─────────────────────────────────────────────
+//  Color sensor (pulse width in us; shorter = brighter)
+//    RED:LOW,LOW  BLUE:LOW,HIGH  CLEAR:HIGH,LOW  GREEN:HIGH,HIGH
+// ─────────────────────────────────────────────
+unsigned int csReadChannel(bool s2, bool s3) {
+  digitalWrite(CS_S2, s2);
+  digitalWrite(CS_S3, s3);
+  delayMicroseconds(120);
+  unsigned int period = pulseIn(CS_OUT, LOW, CS_PULSE_TIMEOUT_US);
+  if (period == 0) period = CS_PULSE_TIMEOUT_US;
+  return period;
 }
 
-void setup() {
-  Serial.begin(115200);
+void printColor() {
+  unsigned int r = csReadChannel(LOW,  LOW);
+  unsigned int b = csReadChannel(LOW,  HIGH);
+  unsigned int g = csReadChannel(HIGH, HIGH);
+  float ratio = (r > 0) ? (float)b / (float)r : 0.0f;
 
-  // Servo
-  myservo.attach(SERVO_PIN);
-  myservo.write(CENTER_ANGLE);
+  const char* guess = "none(white)";
+  if      (ratio >= CS_ORANGE_RATIO) guess = "ORANGE";
+  else if (ratio <= CS_BLUE_RATIO)   guess = "BLUE";
 
-  // L298N
-  pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
-  pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
-  stopMotors();
-
-  // Ultrasonido frontal
-  pinMode(FRONT_TRIG_PIN, OUTPUT);
-  pinMode(FRONT_ECHO_PIN, INPUT);
-
-  // Piezo
-  pinMode(PIEZO_PIN, OUTPUT);
-
-  Serial.println("READY: forward + ACTIVE front detection @ <35cm (beep, back, turn-left, straighten).");
+  Serial.print("R="); Serial.print(r);
+  Serial.print(" G="); Serial.print(g);
+  Serial.print(" B="); Serial.print(b);
+  Serial.print("  B/R="); Serial.print(ratio, 2);
+  Serial.print("  -> "); Serial.println(guess);
 }
 
-void loop() {
-  // Avanza por defecto
-  myservo.write(CENTER_ANGLE);
-  moveForward(SPEED_FWD);
-  printState(FWD, "Forward...");
+// ─────────────────────────────────────────────
+//  Motors (PWM speed on ENA)
+// ─────────────────────────────────────────────
+void motorForward() {
+  analogWrite(ENA, motorSpeed);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+}
 
-  // Polling mientras avanza (rápido y con filtro)
-  while (true) {
-    long dF = readDistanceFilteredCm(FRONT_TRIG_PIN, FRONT_ECHO_PIN, 3, 12);
+void motorBackward() {
+  analogWrite(ENA, motorSpeed);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+}
 
-    if (dF > 0 && dF < THRESHOLD_CM) {
-      // --- ALERTA: obstáculo cerca ---
-      Serial.print("Detected @ "); Serial.print(dF); Serial.println(" cm (<35)");
-      printState(ALERT, "Beep + back + turn left");
+void motorStop() {
+  analogWrite(ENA, 0);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  driving  = false;
+  avoiding = false;
+  Serial.println("Motors: STOPPED");
+}
 
-      // Beep
-      tone(PIEZO_PIN, 1000, BEEP_MS);
-      delay(BEEP_MS + 10);
-      noTone(PIEZO_PIN);
+// ─────────────────────────────────────────────
+//  CLOSED-LOOP OBSTACLE AVOIDANCE
+//  The car keeps turning WHILE the front is blocked, and only straightens
+//  out once the obstacle has actually been passed (hysteresis: TRIGGER=30 /
+//  CLEAR=45). The side is decided ONCE on entry, and the turn angle is
+//  proportional: the closer the obstacle, the sharper the turn (30° to 90°).
+// ─────────────────────────────────────────────
 
-      // Retrocede un poco
-      printState(BACK, "Backing...");
-      moveBackward(SPEED_BACK);
-      delay(BACK_MS);
+// ─────────────────────────────────────────────
+//  Converts a fraction (0.0 = straight, 1.0 = full lock) into a servo angle,
+//  using each side's actual travel range. This is the only place that
+//  touches the servo for steering, so the asymmetry is resolved here once.
+// ─────────────────────────────────────────────
+int steerAngle(float frac, bool toRight) {
+  frac = constrain(frac, 0.0f, 1.0f);
+  int angle = toRight
+    ? SERVO_CENTER + (int)(frac * (SERVO_RIGHT  - SERVO_CENTER))
+    : SERVO_CENTER - (int)(frac * (SERVO_CENTER - SERVO_LEFT));
+  return constrain(angle, SERVO_LEFT, SERVO_RIGHT);
+}
 
-      // Girar a la izquierda (servo a 50°) mientras avanza lento TURN_MS
-      myservo.write(LEFT_ANGLE);
-      printState(TURN, "Turning left (2.5 s)...");
-      moveForward(SPEED_TURN);
-      delay(TURN_MS);
+// Picks the more open side. "---" (-1) = nothing nearby = open.
+bool pickOpenSide() {
+  float l = readDistance(TRIG_L, ECHO_L);
+  float r = readDistance(TRIG_R, ECHO_R);
+  if (l < 0) l = 999;
+  if (r < 0) r = 999;
+  return (r >= l);               // true -> right
+}
 
-      // Enderezar (seguir avanzando mientras endereza)
-      myservo.write(CENTER_ANGLE);
-      printState(STRAIGHTEN, "Straightening...");
-      delay(STRAIGHTEN_MS);
+// Turn angle proportional to how close the obstacle is.
+int avoidAngle(float f) {
+  float t = (AVOID_TRIGGER_CM - f) / (float)(AVOID_TRIGGER_CM - AVOID_PANIC_CM);
+  t = constrain(t, 0.0f, 1.0f);
+  float frac = AVOID_FRAC_MIN + t * (AVOID_FRAC_MAX - AVOID_FRAC_MIN);
+  return steerAngle(frac, avoidRight);
+}
 
-      // Cooldown para no disparar de inmediato de nuevo
-      printState(IDLE, "Cooldown...");
-      delay(COOLDOWN_MS);
+// Short reverse pulse with COUNTER-STEER: in an Ackermann layout, reversing
+// with the wheels turned the opposite way points the nose toward open space.
+void avoidReversePulse() {
+  steeringServo.write(avoidRight ? SERVO_LEFT : SERVO_RIGHT);
+  analogWrite(ENA, motorSpeed);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  delay(AVOID_REVERSE_MS);
+  analogWrite(ENA, 0);
+  digitalWrite(IN2, LOW);
+}
 
-      // Volver a bucle principal (seguirá en forward)
-      break;
+// ─────────────────────────────────────────────
+//  Continuous steering from the side sensors — BANDED (anti zig-zag).
+//    - diff = left - right, with distances clamped to SIDE_CLAMP_CM so an
+//      open side doesn't trigger a sudden hard turn.
+//    - Fixed correction per band (15°/30°/45°) with a deadband to go
+//      straight when centered. No continuous gain -> no oscillation.
+//    - diff > 0 -> more space on the left  -> turn left  (smaller angle)
+//      diff < 0 -> more space on the right -> turn right (larger angle)
+// ─────────────────────────────────────────────
+void steerFromSides() {
+  float l = readDistance(TRIG_L, ECHO_L);
+  float r = readDistance(TRIG_R, ECHO_R);
+  if (l < 0) l = SIDE_OPEN_CM;
+  if (r < 0) r = SIDE_OPEN_CM;
+
+  if (l > SIDE_CLAMP_CM) l = SIDE_CLAMP_CM;
+  if (r > SIDE_CLAMP_CM) r = SIDE_CLAMP_CM;
+
+  float diff = l - r;
+  int   a    = (int)fabs(diff);
+
+  float frac;
+  if      (a < STEER_DEADBAND)  frac = 0.0f;               // centered -> straight
+  else if (a < STEER_BAND_NEAR) frac = STEER_FRAC_SMALL;   // slightly off
+  else if (a < STEER_BAND_FAR)  frac = STEER_FRAC_MED;     // more off
+  else                          frac = STEER_FRAC_MAX;     // very off
+
+  if (frac == 0.0f) steeringServo.write(SERVO_CENTER);
+  else              steeringServo.write(steerAngle(frac, diff < 0));  // diff<0 -> right
+}
+
+// ─────────────────────────────────────────────
+//  Menu
+// ─────────────────────────────────────────────
+void printMenu() {
+  Serial.println("============================");
+  Serial.println("  ROBOT DIAGNOSTIC MENU");
+  Serial.println("============================");
+  Serial.println("  d        -> read distances");
+  Serial.println("  a        -> toggle auto distances");
+  Serial.println("  c        -> read color once");
+  Serial.println("  ca       -> toggle auto color (calibration)");
+  Serial.println("  m:f      -> motors forward");
+  Serial.println("  m:b      -> motors backward");
+  Serial.println("  m:s      -> stop motors");
+  Serial.println("  v:<0-255>-> motor speed");
+  Serial.println("  go       -> autonomous driving (L/R + front avoidance)");
+  Serial.println("  s:<deg>  -> servo angle");
+  Serial.println("  s:l/c/r  -> servo left(0) / center(50) / right(180)");
+  Serial.println("  ?        -> show this menu");
+  Serial.println("============================");
+}
+
+// ─────────────────────────────────────────────
+//  Serial command handler
+// ─────────────────────────────────────────────
+void handleCommand(String cmd) {
+  cmd.trim();
+  cmd.toLowerCase();
+
+  if (cmd == "d") {
+    printDistances();
+
+  } else if (cmd == "a") {
+    autoDistance = !autoDistance;
+    Serial.print("Auto distances: "); Serial.println(autoDistance ? "ON" : "OFF");
+
+  } else if (cmd == "c") {
+    printColor();
+
+  } else if (cmd == "ca") {
+    autoColor = !autoColor;
+    Serial.print("Auto color: "); Serial.println(autoColor ? "ON" : "OFF");
+
+  } else if (cmd == "m:f") {
+    driving = false; avoiding = false;      // manual override of 'go'
+    motorForward();
+    Serial.print("Motors: FORWARD  (speed "); Serial.print(motorSpeed); Serial.println(")");
+
+  } else if (cmd == "m:b") {
+    driving = false; avoiding = false;
+    motorBackward();
+    Serial.print("Motors: BACKWARD (speed "); Serial.print(motorSpeed); Serial.println(")");
+
+  } else if (cmd == "m:s") {
+    motorStop();
+
+  } else if (cmd == "go") {
+    steeringServo.write(SERVO_CENTER);
+    driving  = true;
+    avoiding = false;
+    motorForward();
+    Serial.println(">> GO: autonomous driving. Send m:s to stop.");
+
+  } else if (cmd.startsWith("v:")) {
+    int v = cmd.substring(2).toInt();
+    if (v >= 0 && v <= 255) {
+      motorSpeed = v;
+      Serial.print("Speed: "); Serial.println(motorSpeed);
+      if (driving) motorForward();   // apply immediately if already moving
+    } else {
+      Serial.println("Invalid speed. Use 0-255.");
     }
 
-    // pequeño respiro (detección más “activa”: 20–40 ms es buen rango)
-    delay(25);
+  } else if (cmd == "s:l") {
+    steeringServo.write(SERVO_LEFT);
+    Serial.print("Servo: LEFT ("); Serial.print(SERVO_LEFT); Serial.println("deg)");
+
+  } else if (cmd == "s:c") {
+    steeringServo.write(SERVO_CENTER);
+    Serial.print("Servo: CENTER ("); Serial.print(SERVO_CENTER); Serial.println("deg)");
+
+  } else if (cmd == "s:r") {
+    steeringServo.write(SERVO_RIGHT);
+    Serial.print("Servo: RIGHT ("); Serial.print(SERVO_RIGHT); Serial.println("deg)");
+
+  } else if (cmd.startsWith("s:")) {
+    int angle = cmd.substring(2).toInt();
+    if (angle >= 0 && angle <= 180) {
+      steeringServo.write(angle);
+      Serial.print("Servo: "); Serial.print(angle); Serial.println("deg");
+    } else {
+      Serial.println("Invalid angle. Use 0-180.");
+    }
+
+  } else if (cmd == "?") {
+    printMenu();
+
+  } else {
+    Serial.print("Unknown command: "); Serial.println(cmd);
+    Serial.println("Type ? for help");
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Setup
+// ─────────────────────────────────────────────
+void setup() {
+  Serial.begin(9600);
+
+  steeringServo.attach(SERVO_PIN);
+  steeringServo.write(SERVO_CENTER);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  motorStop();
+
+  pinMode(TRIG_F, OUTPUT); pinMode(ECHO_F, INPUT);
+  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
+
+  pinMode(CS_S0, OUTPUT); pinMode(CS_S1, OUTPUT);
+  pinMode(CS_S2, OUTPUT); pinMode(CS_S3, OUTPUT);
+  pinMode(CS_OUT, INPUT);
+  digitalWrite(CS_S0, HIGH);    // frequency scaling at 20%
+  digitalWrite(CS_S1, LOW);
+
+  delay(500);
+  printMenu();
+}
+
+// ─────────────────────────────────────────────
+//  Loop
+// ─────────────────────────────────────────────
+void loop() {
+  if (driving) {
+    float f = readDistance(TRIG_F, ECHO_F);
+    if (f < 0) f = 999;                       // no echo = clear
+
+    // ENTERING avoidance
+    if (!avoiding && f < AVOID_TRIGGER_CM) {
+      avoiding   = true;
+      avoidRight = pickOpenSide();            // decided once
+      avoidStart = millis();
+      Serial.print(">> Obstacle at "); Serial.print(f, 1);
+      Serial.print("cm - avoiding to the ");
+      Serial.println(avoidRight ? "RIGHT" : "LEFT");
+    }
+
+    if (avoiding) {
+      if (f > AVOID_CLEAR_CM) {               // EXIT: now clear
+        avoiding = false;
+        steeringServo.write(SERVO_CENTER);
+        Serial.println(">> Clear. Resuming.");
+      }
+      else if (millis() - avoidStart > AVOID_TIMEOUT_MS) {
+        Serial.println(">> Could not get clear. Stopping.");
+        motorStop();
+      }
+      else if (f < AVOID_PANIC_CM) {          // too close: reverse and retry
+        avoidReversePulse();
+        motorForward();
+      }
+      else {                                  // TURN and keep turning
+        steeringServo.write(avoidAngle(f));
+        motorForward();
+      }
+    } else {
+      steerFromSides();                       // normal driving: stay centered
+    }
+  }
+
+  if (autoDistance && millis() - lastAutoRead > 500) {
+    printDistances();
+    lastAutoRead = millis();
+  }
+
+  if (autoColor && millis() - lastColorRead > 300) {
+    printColor();
+    lastColorRead = millis();
+  }
+
+  if (Serial.available() > 0) {
+    String cmd = Serial.readStringUntil('\n');
+    handleCommand(cmd);
   }
 }
