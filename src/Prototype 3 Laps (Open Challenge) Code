@@ -1,0 +1,236 @@
+// ═══════════════════════════════════════════════════════
+//  WRO 2026 - OPEN CHALLENGE - CLOCKWISE
+//  Arduino Mega
+//  Centered wall following + lap counting with TCS3200
+// ═══════════════════════════════════════════════════════
+
+#include <Servo.h>
+
+// ── Servo ────────────────────────────────────────────────
+Servo steeringServo;
+#define SERVO_PIN          9
+#define SERVO_CENTER       90
+#define SERVO_LEFT         60
+#define SERVO_RIGHT        140
+#define SERVO_SLIGHT_LEFT  75
+#define SERVO_SLIGHT_RIGHT 105
+
+// ── Motor pins ───────────────────────────────────────────
+#define ENA  12
+#define IN1  11
+#define IN2  10
+#define SPEED_HIGH  200
+
+// ── Ultrasonic pins ──────────────────────────────────────
+#define TRIG_F  30
+#define ECHO_F  32
+#define TRIG_L  24
+#define ECHO_L  22
+#define TRIG_R  50
+#define ECHO_R  52
+
+// ── Color sensor pins ────────────────────────────────────
+#define S0   34
+#define S1   36
+#define S2   38
+#define S3   40
+#define OUT  42
+
+// ── Color thresholds (from calibration) ──────────────────
+#define ORANGE_G_MIN  35
+#define ORANGE_R_MAX  40
+#define BLUE_G_MIN    70
+
+// ── Wall following config ────────────────────────────────
+#define FRONT_STOP_DIST  25   // cm - too close to front, turn
+#define WALL_TOLERANCE   8    // cm - acceptable error
+
+// ── Lap counting ─────────────────────────────────────────
+#define TOTAL_ORANGE_LINES  12
+int orangeCount     = 0;
+int blueCount       = 0;
+bool lastWasOrange  = false;
+bool lastWasBlue    = false;
+unsigned long lastLineTime = 0;
+#define LINE_COOLDOWN  1500   // ms between detections
+
+bool running = false;
+bool finished = false;
+
+// ─────────────────────────────────────────────────────────
+//  Read ultrasonic distance (cm)
+// ─────────────────────────────────────────────────────────
+float readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return 999;
+  float dist = duration * 0.034 / 2.0;
+  if (dist > 400) return 999;
+  return dist;
+}
+
+// ─────────────────────────────────────────────────────────
+//  Read one color channel
+// ─────────────────────────────────────────────────────────
+int readChannel(int s2val, int s3val) {
+  digitalWrite(S2, s2val);
+  digitalWrite(S3, s3val);
+  delay(10);
+  return pulseIn(OUT, LOW, 100000);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Detect line: 0=nothing  1=orange  2=blue
+// ─────────────────────────────────────────────────────────
+int detectLine() {
+  int r = readChannel(LOW, LOW);
+  int g = readChannel(HIGH, HIGH);
+
+  if (g > BLUE_G_MIN)                          return 2;
+  if (g > ORANGE_G_MIN && r < ORANGE_R_MAX)    return 1;
+  return 0;
+}
+
+// ─────────────────────────────────────────────────────────
+//  Motor control
+// ─────────────────────────────────────────────────────────
+void driveForward() {
+  analogWrite(ENA, SPEED_HIGH);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+}
+
+void stopMotor() {
+  digitalWrite(ENA, LOW);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Wall following - centered between L and R walls
+//  Uses error = (distL - distR) to steer
+//  For clockwise: front wall hit = turn right
+// ─────────────────────────────────────────────────────────
+void wallFollow() {
+  float distF = readDistance(TRIG_F, ECHO_F);
+  float distL = readDistance(TRIG_L, ECHO_L);
+  float distR = readDistance(TRIG_R, ECHO_R);
+
+  Serial.print("F:"); Serial.print(distF);
+  Serial.print(" L:"); Serial.print(distL);
+  Serial.print(" R:"); Serial.println(distR);
+
+  // Front wall too close → turn right (clockwise corner)
+  if (distF < FRONT_STOP_DIST) {
+    steeringServo.write(SERVO_RIGHT);
+    driveForward();
+    return;
+  }
+
+  // Center between left and right walls
+  // error > 0 means too far left → steer left
+  // error < 0 means too far right → steer right
+  float error = distL - distR;
+
+  if (error > WALL_TOLERANCE) {
+    steeringServo.write(SERVO_SLIGHT_LEFT);
+  } else if (error < -WALL_TOLERANCE) {
+    steeringServo.write(SERVO_SLIGHT_RIGHT);
+  } else {
+    steeringServo.write(SERVO_CENTER);
+  }
+
+  driveForward();
+}
+
+// ─────────────────────────────────────────────────────────
+//  Setup
+// ─────────────────────────────────────────────────────────
+void setup() {
+  Serial.begin(9600);
+
+  steeringServo.attach(SERVO_PIN);
+  steeringServo.write(SERVO_CENTER);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  stopMotor();
+
+  pinMode(TRIG_F, OUTPUT); pinMode(ECHO_F, INPUT);
+  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
+  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
+
+  pinMode(S0, OUTPUT); pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT);
+  pinMode(OUT, INPUT);
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);  // 20% frequency scaling
+
+  delay(500);
+  Serial.println("Ready! Send any key to START.");
+  while (!Serial.available()) { delay(10); }
+  Serial.read();
+
+  running = true;
+  Serial.println("GO! Clockwise...");
+}
+
+// ─────────────────────────────────────────────────────────
+//  Loop
+// ─────────────────────────────────────────────────────────
+void loop() {
+
+  if (finished) {
+    stopMotor();
+    steeringServo.write(SERVO_CENTER);
+    return;
+  }
+
+  // ── Color sensor lap counting ───────────────────────────
+  unsigned long now = millis();
+  if (now - lastLineTime > LINE_COOLDOWN) {
+    int line = detectLine();
+
+    if (line == 1 && !lastWasOrange) {
+      orangeCount++;
+      lastWasOrange = true;
+      lastWasBlue   = false;
+      lastLineTime  = now;
+      Serial.print("ORANGE #");
+      Serial.print(orangeCount);
+      Serial.print(" / ");
+      Serial.println(TOTAL_ORANGE_LINES);
+    }
+    else if (line == 2 && !lastWasBlue) {
+      blueCount++;
+      lastWasBlue   = true;
+      lastWasOrange = false;
+      lastLineTime  = now;
+      Serial.print("BLUE #");
+      Serial.println(blueCount);
+    }
+    else if (line == 0) {
+      lastWasOrange = false;
+      lastWasBlue   = false;
+    }
+  }
+
+  // ── Stop condition: 12 orange + 1 blue ─────────────────
+  if (orangeCount >= TOTAL_ORANGE_LINES && blueCount >= 1) {
+    finished = true;
+    stopMotor();
+    steeringServo.write(SERVO_CENTER);
+    Serial.println("3 LAPS COMPLETE - STOPPED!");
+    return;
+  }
+
+  // ── Drive ───────────────────────────────────────────────
+  if (running) {
+    wallFollow();
+  }
+}
