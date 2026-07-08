@@ -1,145 +1,109 @@
 PROTOTYPE CODE 1:
 
 
-#include <Servo.h>
+// ─────────────────────────────────────────────
+//  4x Ultrasonic Distance Sensor - Arduino Mega
+//  Sensors: Front, Back, Left, Right
+// ─────────────────────────────────────────────
 
-Servo steeringServo;
+// ── Pin definitions ──────────────────────────
+#define TRIG_L 24
+#define ECHO_L 22
 
-// --- Pines del sistema ---
-const int PIN_SERVO = 6;
-const int ANGULO_CENTRO = 90;
-const int PIN_PIEZO = 26;
-const int ANGULO_GIRO_IZQ = 55;  // Ángulo arbitrario para esquivar obstáculos
+#define TRIG_B 28
+#define ECHO_B 26
 
-// Pines del sensor ultrasónico frontal
-const int PIN_TRIG_FRENTE = 2;
-const int PIN_ECHO_FRENTE = 3;
+#define TRIG_F 30
+#define ECHO_F 32
 
-// Pines para el control de motores
-const int MOTOR_A_PWM = 7;
-const int MOTOR_A_IN1 = 8;
-const int MOTOR_A_IN2 = 9;
+#define TRIG_R 50
+#define ECHO_R 52
 
-const int MOTOR_B_PWM = 12;
-const int MOTOR_B_IN3 = 11;
-const int MOTOR_B_IN4 = 10;
+// ── Config ────────────────────────────────────
+#define SOUND_SPEED     0.034   // cm per microsecond
+#define MAX_DISTANCE    400     // cm - beyond this = out of range
+#define READ_INTERVAL   100     // ms between full sensor sweeps
 
-// --- FUNCIONES PERSONALIZADAS ---
+// ─────────────────────────────────────────────
+//  Read distance from a single sensor (cm)
+//  Returns -1 if out of range or no echo
+// ─────────────────────────────────────────────
+float readDistance(int trigPin, int echoPin) {
+  // Clear trig pin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
 
-// Gira el servo hacia un ángulo objetivo de forma progresiva
-void moverServoA(int anguloObjetivo, int retardoPaso) {
-  int anguloActual = steeringServo.read();
-  
-  // Giro hacia la derecha
-  if (anguloObjetivo > anguloActual) {
-    for (int ang = anguloActual; ang <= anguloObjetivo; ang += 5) {
-      steeringServo.write(ang);
-      delay(retardoPaso);
-    }
-  } 
-  // Giro hacia la izquierda
-  else if (anguloObjetivo < anguloActual) {
-    for (int ang = anguloActual; ang >= anguloObjetivo; ang -= 3) {
-      steeringServo.write(ang);
-      delay(retardoPaso);
-    }
-  }
+  // Send 10us pulse
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // Measure echo duration (timeout = 30ms)
+  long duration = pulseIn(echoPin, HIGH, 30000);
+
+  if (duration == 0) return -1;  // No echo received
+
+  float distance = duration * SOUND_SPEED / 2.0;
+
+  if (distance > MAX_DISTANCE) return -1;  // Out of range
+
+  return distance;
 }
 
-// Control de avance o retroceso de ambos motores
-void moverMotores(int velocidadA, int velocidadB, bool adelante) {
-  if (adelante) {
-    digitalWrite(MOTOR_A_IN1, HIGH);
-    digitalWrite(MOTOR_A_IN2, LOW);
-    digitalWrite(MOTOR_B_IN3, HIGH);
-    digitalWrite(MOTOR_B_IN4, LOW);
+// ─────────────────────────────────────────────
+//  Print a distance reading with label
+// ─────────────────────────────────────────────
+void printDistance(const char* label, float dist) {
+  Serial.print(label);
+  Serial.print(": ");
+  if (dist < 0) {
+    Serial.print("OUT OF RANGE");
   } else {
-    digitalWrite(MOTOR_A_IN1, LOW);
-    digitalWrite(MOTOR_A_IN2, HIGH);
-    digitalWrite(MOTOR_B_IN3, LOW);
-    digitalWrite(MOTOR_B_IN4, HIGH);
+    Serial.print(dist, 1);   // 1 decimal place
+    Serial.print(" cm");
   }
-
-  analogWrite(MOTOR_A_PWM, velocidadA);
-  analogWrite(MOTOR_B_PWM, velocidadB);
+  Serial.print("   ");       // spacing between readings
 }
 
-// Detiene los motores (ambos)
-void frenarTodo() {
-  analogWrite(MOTOR_A_PWM, 0);
-  analogWrite(MOTOR_B_PWM, 0);
-}
-
-// Mide distancia con el sensor ultrasónico
-long medirDistancia(int trig, int echo) {
-  digitalWrite(trig, LOW);
-  delayMicroseconds(3);  // antes era 2us, subí un poco por seguridad
-  digitalWrite(trig, HIGH);
-  delayMicroseconds(12); // antes era 10us, igual subí un poco
-  digitalWrite(trig, LOW);
-
-  long duracion = pulseIn(echo, HIGH);
-  long distancia = duracion * 0.034 / 2;
-
-  return distancia;
-}
-
-// Hace sonar el zumbador
-void hacerBeep(int tono, int duracion) {
-  tone(PIN_PIEZO, tono, duracion);
-  delay(duracion + 10); // le agregué un poco más de margen
-}
-
-// --- SETUP DEL ROBOT ---
+// ─────────────────────────────────────────────
+//  Setup
+// ─────────────────────────────────────────────
 void setup() {
   Serial.begin(9600);
 
-  // Configuración de pines de motor
-  pinMode(MOTOR_A_PWM, OUTPUT);
-  pinMode(MOTOR_A_IN1, OUTPUT);
-  pinMode(MOTOR_A_IN2, OUTPUT);
-  pinMode(MOTOR_B_PWM, OUTPUT);
-  pinMode(MOTOR_B_IN3, OUTPUT);
-  pinMode(MOTOR_B_IN4, OUTPUT);
+  // Set all trig pins as OUTPUT, echo pins as INPUT
+  int trigPins[] = { TRIG_L, TRIG_B, TRIG_F, TRIG_R };
+  int echoPins[] = { ECHO_L, ECHO_B, ECHO_F, ECHO_R };
 
-  pinMode(PIN_PIEZO, OUTPUT);
+  for (int i = 0; i < 4; i++) {
+    pinMode(trigPins[i], OUTPUT);
+    pinMode(echoPins[i], INPUT);
+    digitalWrite(trigPins[i], LOW);
+  }
 
-  pinMode(PIN_TRIG_FRENTE, OUTPUT);
-  pinMode(PIN_ECHO_FRENTE, INPUT);
-
-  steeringServo.attach(PIN_SERVO);
-  steeringServo.write(ANGULO_CENTRO);
-
-  Serial.println("Sistema iniciado. Esperando...");
-  delay(4000);  // Espera larga para debugging inicial
+  Serial.println("=================================");
+  Serial.println("  4x Ultrasonic Sensor Monitor  ");
+  Serial.println("=================================");
+  delay(500);
 }
 
-// --- LOOP PRINCIPAL ---
+// ─────────────────────────────────────────────
+//  Loop
+// ─────────────────────────────────────────────
 void loop() {
-  long distanciaFrente = medirDistancia(PIN_TRIG_FRENTE, PIN_ECHO_FRENTE);
+  float distF = readDistance(TRIG_F, ECHO_F);
+  float distB = readDistance(TRIG_B, ECHO_B);
+  float distL = readDistance(TRIG_L, ECHO_L);
+  float distR = readDistance(TRIG_R, ECHO_R);
 
-  // En caso de obstáculo cercano
-  if (distanciaFrente > 0 && distanciaFrente < 20) {
-    Serial.println("¡Obstáculo detectado! Intentando rodear...");
+  printDistance("FRONT", distF);
+  printDistance("BACK",  distB);
+  printDistance("LEFT",  distL);
+  printDistance("RIGHT", distR);
 
-    frenarTodo();
-    hacerBeep(950, 120);
-    delay(400);
+  Serial.println();   // newline after all 4 readings
 
-    moverServoA(ANGULO_GIRO_IZQ, 12);  // gira un poco a la izquierda
-    moverMotores(115, 115, true);      // velocidad reducida para maniobra
-    delay(1300);
-
-    moverServoA(ANGULO_CENTRO, 10);    // vuelve al centro
-    frenarTodo();
-    delay(400);
-  } 
-  // Camino libre
-  else {
-    Serial.println("Camino libre. Avanzando.");
-    moverServoA(ANGULO_CENTRO, 8);
-    moverMotores(160, 160, true);  // Aceleración mayor en ausencia de obstáculos
-  }
+  delay(READ_INTERVAL);
 }
 
 
