@@ -3,7 +3,7 @@ from pathlib import Path
 path = Path("/mnt/data/WRO_prototipo_codigo_espanol.ino")
 text = path.read_text(encoding="utf-8")
 
-# Corregir palabras reservadas de C++ que no deben traducirse.
+
 text = text.replace("falso", "false")
 
 # Completar traducciones pendientes en comentarios.
