@@ -6,7 +6,7 @@ text = path.read_text(encoding="utf-8")
 
 text = text.replace("falso", "false")
 
-# Completar traducciones pendientes en comentarios.
+
 text = text.replace("// ── Motor pins ────────────────────────────────",
                     "// ── Pines del motor ───────────────────────────")
 text = text.replace("// ── Ultrasonic sensor pins ────────────────────",
@@ -20,7 +20,7 @@ text = text.replace("// ── Continuous steering (anti zig-zag) ────�
 text = text.replace("// ── State ─────────────────────────────────────",
                     "// ── Estado ─────────────────────────────────────")
 
-# Completar traducciones pendientes en textos del Monitor Serial.
+
 text = text.replace(
     'Serial.println("  go       -> autonomous conduciendo (L/R + front avoidance)");',
     'Serial.println("  go       -> conduccion autonoma (I/D + evasion frontal)");'
@@ -42,7 +42,7 @@ text = text.replace(
     'Serial.print("cm - evadiendo hacia la ");'
 )
 
-# La última línea del pegado era una nota en inglés, no código válido.
+
 text = text.replace(
     "\nthis was our first prototype code",
     "\n// Este fue nuestro primer código prototipo"
@@ -50,7 +50,7 @@ text = text.replace(
 
 path.write_text(text, encoding="utf-8")
 
-# Verificaciones simples para detectar errores introducidos por la traducción.
+
 checks = {
     "usa_false_cpp": "false" in text,
     "no_contiene_falso": "falso" not in text,
