@@ -1,11 +1,12 @@
 // ─────────────────────────────────────────────
-//  EARLIEST MOTOR TEST - Arduino Mega + L298N
+//  PRUEBA INICIAL DEL MOTOR - Arduino Mega + L298N
 //  WRO 2026 Future Engineers
 //
-//  The very first test on this robot: just confirms the DG01D motors
-//  spin forward through the L298N driver at a fixed PWM speed. No
-//  steering, no sensors, no logic yet - this was step one before any
-//  of the sensor or driving code existed.
+//  La primera prueba realizada con este robot: simplemente confirma que
+//  los motores DG01D giran hacia adelante mediante el controlador L298N
+//  a una velocidad PWM fija. Todavía no hay dirección, sensores ni lógica;
+//  este fue el primer paso antes de desarrollar cualquier código de
+//  sensores o conducción.
 // ─────────────────────────────────────────────
 
 #define ENA 12
@@ -26,4 +27,4 @@ void setup() {
 void loop() {
 }
 
-this was our first prototype code
+// Este fue nuestro primer código prototipo
