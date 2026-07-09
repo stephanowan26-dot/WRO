@@ -1,236 +1,631 @@
 // ═══════════════════════════════════════════════════════
-//  WRO 2026 - OPEN CHALLENGE - CLOCKWISE
+//  WRO 2026 - DESAFÍO ABIERTO - SENTIDO HORARIO
 //  Arduino Mega
-//  Centered wall following + lap counting with TCS3200
+//  Seguimiento centrado de paredes + conteo de vueltas con TCS3200
 // ═══════════════════════════════════════════════════════
 
 #include <Servo.h>
 
 // ── Servo ────────────────────────────────────────────────
-Servo steeringServo;
-#define SERVO_PIN          9
-#define SERVO_CENTER       90
-#define SERVO_LEFT         60
-#define SERVO_RIGHT        140
-#define SERVO_SLIGHT_LEFT  75
-#define SERVO_SLIGHT_RIGHT 105
+Servo servoDireccion;
 
-// ── Motor pins ───────────────────────────────────────────
+#define PIN_SERVO              9
+#define SERVO_CENTRO           90
+#define SERVO_IZQUIERDA        60
+#define SERVO_DERECHA          140
+#define SERVO_LEVE_IZQUIERDA   75
+#define SERVO_LEVE_DERECHA     105
+
+// ── Pines del motor ──────────────────────────────────────
 #define ENA  12
 #define IN1  11
 #define IN2  10
-#define SPEED_HIGH  200
 
-// ── Ultrasonic pins ──────────────────────────────────────
-#define TRIG_F  30
-#define ECHO_F  32
-#define TRIG_L  24
-#define ECHO_L  22
-#define TRIG_R  50
-#define ECHO_R  52
+#define VELOCIDAD_ALTA  200
 
-// ── Color sensor pins ────────────────────────────────────
-#define S0   34
-#define S1   36
-#define S2   38
-#define S3   40
-#define OUT  42
+// ── Pines de sensores ultrasónicos ───────────────────────
+#define TRIG_FRONTAL      30
+#define ECO_FRONTAL       32
 
-// ── Color thresholds (from calibration) ──────────────────
-#define ORANGE_G_MIN  35
-#define ORANGE_R_MAX  40
-#define BLUE_G_MIN    70
+#define TRIG_IZQUIERDA    24
+#define ECO_IZQUIERDA     22
 
-// ── Wall following config ────────────────────────────────
-#define FRONT_STOP_DIST  25   // cm - too close to front, turn
-#define WALL_TOLERANCE   8    // cm - acceptable error
+#define TRIG_DERECHA      50
+#define ECO_DERECHA       52
 
-// ── Lap counting ─────────────────────────────────────────
-#define TOTAL_ORANGE_LINES  12
-int orangeCount     = 0;
-int blueCount       = 0;
-bool lastWasOrange  = false;
-bool lastWasBlue    = false;
-unsigned long lastLineTime = 0;
-#define LINE_COOLDOWN  1500   // ms between detections
+// ── Pines del sensor de color ────────────────────────────
+#define S0      34
+#define S1      36
+#define S2      38
+#define S3      40
+#define SALIDA  42
 
-bool running = false;
-bool finished = false;
+// ── Umbrales de color obtenidos de la calibración ────────
+#define VERDE_MIN_NARANJA  35
+#define ROJO_MAX_NARANJA   40
+#define VERDE_MIN_AZUL     70
+
+// ── Configuración del seguimiento de paredes ─────────────
+#define DISTANCIA_FRONTAL_GIRO  25  // cm - demasiado cerca del frente, girar
+#define TOLERANCIA_PARED         8  // cm - error aceptable
+
+// ── Conteo de vueltas ────────────────────────────────────
+#define TOTAL_LINEAS_NARANJAS  12
+
+int contadorNaranja = 0;
+int contadorAzul    = 0;
+
+bool anteriorNaranja = false;
+bool anteriorAzul    = false;
+
+unsigned long tiempoUltimaLinea = 0;
+
+#define TIEMPO_ESPERA_LINEA  1500  // ms entre detecciones
+
+bool funcionando = false;
+bool terminado   = false;
+
 
 // ─────────────────────────────────────────────────────────
-//  Read ultrasonic distance (cm)
+//  Leer distancia ultrasónica (cm)
 // ─────────────────────────────────────────────────────────
-float readDistance(int trigPin, int echoPin) {
-  digitalWrite(trigPin, LOW);
+float leerDistancia(int pinTrig, int pinEco) {
+
+  digitalWrite(pinTrig, LOW);
   delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
+
+  digitalWrite(pinTrig, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  long duration = pulseIn(echoPin, HIGH, 30000);
-  if (duration == 0) return 999;
-  float dist = duration * 0.034 / 2.0;
-  if (dist > 400) return 999;
-  return dist;
+
+  digitalWrite(pinTrig, LOW);
+
+  long duracion =
+    pulseIn(
+      pinEco,
+      HIGH,
+      30000
+    );
+
+  if (duracion == 0) {
+    return 999;
+  }
+
+  float distancia =
+    duracion * 0.034 / 2.0;
+
+  if (distancia > 400) {
+    return 999;
+  }
+
+  return distancia;
 }
 
+
 // ─────────────────────────────────────────────────────────
-//  Read one color channel
+//  Leer un canal del sensor de color
 // ─────────────────────────────────────────────────────────
-int readChannel(int s2val, int s3val) {
-  digitalWrite(S2, s2val);
-  digitalWrite(S3, s3val);
+int leerCanal(
+  int valorS2,
+  int valorS3
+) {
+
+  digitalWrite(
+    S2,
+    valorS2
+  );
+
+  digitalWrite(
+    S3,
+    valorS3
+  );
+
   delay(10);
-  return pulseIn(OUT, LOW, 100000);
+
+  return pulseIn(
+    SALIDA,
+    LOW,
+    100000
+  );
 }
 
-// ─────────────────────────────────────────────────────────
-//  Detect line: 0=nothing  1=orange  2=blue
-// ─────────────────────────────────────────────────────────
-int detectLine() {
-  int r = readChannel(LOW, LOW);
-  int g = readChannel(HIGH, HIGH);
 
-  if (g > BLUE_G_MIN)                          return 2;
-  if (g > ORANGE_G_MIN && r < ORANGE_R_MAX)    return 1;
+// ─────────────────────────────────────────────────────────
+//  Detectar línea:
+//  0 = nada
+//  1 = naranja
+//  2 = azul
+// ─────────────────────────────────────────────────────────
+int detectarLinea() {
+
+  int rojo =
+    leerCanal(
+      LOW,
+      LOW
+    );
+
+  int verde =
+    leerCanal(
+      HIGH,
+      HIGH
+    );
+
+
+  // Azul
+  if (
+    verde >
+    VERDE_MIN_AZUL
+  ) {
+
+    return 2;
+  }
+
+
+  // Naranja
+  if (
+    verde >
+    VERDE_MIN_NARANJA &&
+    rojo <
+    ROJO_MAX_NARANJA
+  ) {
+
+    return 1;
+  }
+
+
   return 0;
 }
 
+
 // ─────────────────────────────────────────────────────────
-//  Motor control
+//  Control del motor
 // ─────────────────────────────────────────────────────────
-void driveForward() {
-  analogWrite(ENA, SPEED_HIGH);
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
+void avanzar() {
+
+  analogWrite(
+    ENA,
+    VELOCIDAD_ALTA
+  );
+
+  digitalWrite(
+    IN1,
+    HIGH
+  );
+
+  digitalWrite(
+    IN2,
+    LOW
+  );
 }
 
-void stopMotor() {
-  digitalWrite(ENA, LOW);
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
+
+void detenerMotor() {
+
+  digitalWrite(
+    ENA,
+    LOW
+  );
+
+  digitalWrite(
+    IN1,
+    LOW
+  );
+
+  digitalWrite(
+    IN2,
+    LOW
+  );
 }
 
-// ─────────────────────────────────────────────────────────
-//  Wall following - centered between L and R walls
-//  Uses error = (distL - distR) to steer
-//  For clockwise: front wall hit = turn right
-// ─────────────────────────────────────────────────────────
-void wallFollow() {
-  float distF = readDistance(TRIG_F, ECHO_F);
-  float distL = readDistance(TRIG_L, ECHO_L);
-  float distR = readDistance(TRIG_R, ECHO_R);
 
-  Serial.print("F:"); Serial.print(distF);
-  Serial.print(" L:"); Serial.print(distL);
-  Serial.print(" R:"); Serial.println(distR);
+// ─────────────────────────────────────────────────────────
+//  Seguimiento de paredes
+//
+//  Mantiene el robot centrado entre las paredes
+//  izquierda y derecha.
+//
+//  Error = distancia izquierda - distancia derecha
+//
+//  En sentido horario:
+//  pared frontal cercana = giro hacia la derecha
+// ─────────────────────────────────────────────────────────
+void seguirParedes() {
 
-  // Front wall too close → turn right (clockwise corner)
-  if (distF < FRONT_STOP_DIST) {
-    steeringServo.write(SERVO_RIGHT);
-    driveForward();
+  float distanciaFrontal =
+    leerDistancia(
+      TRIG_FRONTAL,
+      ECO_FRONTAL
+    );
+
+  float distanciaIzquierda =
+    leerDistancia(
+      TRIG_IZQUIERDA,
+      ECO_IZQUIERDA
+    );
+
+  float distanciaDerecha =
+    leerDistancia(
+      TRIG_DERECHA,
+      ECO_DERECHA
+    );
+
+
+  Serial.print("F:");
+  Serial.print(distanciaFrontal);
+
+  Serial.print(" I:");
+  Serial.print(distanciaIzquierda);
+
+  Serial.print(" D:");
+  Serial.println(distanciaDerecha);
+
+
+  // ───────────────────────────────────────────────────────
+  // Pared frontal demasiado cerca
+  // → girar a la derecha
+  // ───────────────────────────────────────────────────────
+
+  if (
+    distanciaFrontal <
+    DISTANCIA_FRONTAL_GIRO
+  ) {
+
+    servoDireccion.write(
+      SERVO_DERECHA
+    );
+
+    avanzar();
+
     return;
   }
 
-  // Center between left and right walls
-  // error > 0 means too far left → steer left
-  // error < 0 means too far right → steer right
-  float error = distL - distR;
 
-  if (error > WALL_TOLERANCE) {
-    steeringServo.write(SERVO_SLIGHT_LEFT);
-  } else if (error < -WALL_TOLERANCE) {
-    steeringServo.write(SERVO_SLIGHT_RIGHT);
-  } else {
-    steeringServo.write(SERVO_CENTER);
+  // ───────────────────────────────────────────────────────
+  // Centrarse entre pared izquierda y derecha
+  //
+  // error > 0:
+  // hay más distancia a la izquierda
+  // → corregir hacia la izquierda
+  //
+  // error < 0:
+  // hay más distancia a la derecha
+  // → corregir hacia la derecha
+  // ───────────────────────────────────────────────────────
+
+  float error =
+    distanciaIzquierda -
+    distanciaDerecha;
+
+
+  if (
+    error >
+    TOLERANCIA_PARED
+  ) {
+
+    servoDireccion.write(
+      SERVO_LEVE_IZQUIERDA
+    );
   }
 
-  driveForward();
+  else if (
+    error <
+    -TOLERANCIA_PARED
+  ) {
+
+    servoDireccion.write(
+      SERVO_LEVE_DERECHA
+    );
+  }
+
+  else {
+
+    servoDireccion.write(
+      SERVO_CENTRO
+    );
+  }
+
+
+  avanzar();
 }
 
+
 // ─────────────────────────────────────────────────────────
-//  Setup
+//  Configuración inicial
 // ─────────────────────────────────────────────────────────
 void setup() {
+
   Serial.begin(9600);
 
-  steeringServo.attach(SERVO_PIN);
-  steeringServo.write(SERVO_CENTER);
 
-  pinMode(ENA, OUTPUT);
-  pinMode(IN1, OUTPUT);
-  pinMode(IN2, OUTPUT);
-  stopMotor();
+  // Servo
+  servoDireccion.attach(
+    PIN_SERVO
+  );
 
-  pinMode(TRIG_F, OUTPUT); pinMode(ECHO_F, INPUT);
-  pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
-  pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
+  servoDireccion.write(
+    SERVO_CENTRO
+  );
 
-  pinMode(S0, OUTPUT); pinMode(S1, OUTPUT);
-  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT);
-  pinMode(OUT, INPUT);
-  digitalWrite(S0, HIGH);
-  digitalWrite(S1, LOW);  // 20% frequency scaling
+
+  // Motor
+  pinMode(
+    ENA,
+    OUTPUT
+  );
+
+  pinMode(
+    IN1,
+    OUTPUT
+  );
+
+  pinMode(
+    IN2,
+    OUTPUT
+  );
+
+  detenerMotor();
+
+
+  // Sensor ultrasónico frontal
+  pinMode(
+    TRIG_FRONTAL,
+    OUTPUT
+  );
+
+  pinMode(
+    ECO_FRONTAL,
+    INPUT
+  );
+
+
+  // Sensor ultrasónico izquierdo
+  pinMode(
+    TRIG_IZQUIERDA,
+    OUTPUT
+  );
+
+  pinMode(
+    ECO_IZQUIERDA,
+    INPUT
+  );
+
+
+  // Sensor ultrasónico derecho
+  pinMode(
+    TRIG_DERECHA,
+    OUTPUT
+  );
+
+  pinMode(
+    ECO_DERECHA,
+    INPUT
+  );
+
+
+  // Sensor de color
+  pinMode(
+    S0,
+    OUTPUT
+  );
+
+  pinMode(
+    S1,
+    OUTPUT
+  );
+
+  pinMode(
+    S2,
+    OUTPUT
+  );
+
+  pinMode(
+    S3,
+    OUTPUT
+  );
+
+  pinMode(
+    SALIDA,
+    INPUT
+  );
+
+
+  // Escalado de frecuencia al 20%
+  digitalWrite(
+    S0,
+    HIGH
+  );
+
+  digitalWrite(
+    S1,
+    LOW
+  );
+
 
   delay(500);
-  Serial.println("Ready! Send any key to START.");
-  while (!Serial.available()) { delay(10); }
+
+
+  Serial.println(
+    "Listo. Envia cualquier tecla para INICIAR."
+  );
+
+
+  while (
+    !Serial.available()
+  ) {
+
+    delay(10);
+  }
+
+
   Serial.read();
 
-  running = true;
-  Serial.println("GO! Clockwise...");
+
+  funcionando = true;
+
+
+  Serial.println(
+    "INICIANDO - SENTIDO HORARIO"
+  );
 }
 
+
 // ─────────────────────────────────────────────────────────
-//  Loop
+//  Bucle principal
 // ─────────────────────────────────────────────────────────
 void loop() {
 
-  if (finished) {
-    stopMotor();
-    steeringServo.write(SERVO_CENTER);
+
+  // ───────────────────────────────────────────────────────
+  // Si terminó, mantener todo detenido
+  // ───────────────────────────────────────────────────────
+
+  if (
+    terminado
+  ) {
+
+    detenerMotor();
+
+    servoDireccion.write(
+      SERVO_CENTRO
+    );
+
     return;
   }
 
-  // ── Color sensor lap counting ───────────────────────────
-  unsigned long now = millis();
-  if (now - lastLineTime > LINE_COOLDOWN) {
-    int line = detectLine();
 
-    if (line == 1 && !lastWasOrange) {
-      orangeCount++;
-      lastWasOrange = true;
-      lastWasBlue   = false;
-      lastLineTime  = now;
-      Serial.print("ORANGE #");
-      Serial.print(orangeCount);
-      Serial.print(" / ");
-      Serial.println(TOTAL_ORANGE_LINES);
+  // ───────────────────────────────────────────────────────
+  // Conteo de líneas con el sensor de color
+  // ───────────────────────────────────────────────────────
+
+  unsigned long ahora =
+    millis();
+
+
+  if (
+    ahora -
+    tiempoUltimaLinea >
+    TIEMPO_ESPERA_LINEA
+  ) {
+
+    int linea =
+      detectarLinea();
+
+
+    // ── Línea naranja ─────────────────────────────────────
+
+    if (
+      linea == 1 &&
+      !anteriorNaranja
+    ) {
+
+      contadorNaranja++;
+
+      anteriorNaranja = true;
+
+      anteriorAzul = false;
+
+      tiempoUltimaLinea =
+        ahora;
+
+
+      Serial.print(
+        "NARANJA #"
+      );
+
+      Serial.print(
+        contadorNaranja
+      );
+
+      Serial.print(
+        " / "
+      );
+
+      Serial.println(
+        TOTAL_LINEAS_NARANJAS
+      );
     }
-    else if (line == 2 && !lastWasBlue) {
-      blueCount++;
-      lastWasBlue   = true;
-      lastWasOrange = false;
-      lastLineTime  = now;
-      Serial.print("BLUE #");
-      Serial.println(blueCount);
+
+
+    // ── Línea azul ────────────────────────────────────────
+
+    else if (
+      linea == 2 &&
+      !anteriorAzul
+    ) {
+
+      contadorAzul++;
+
+      anteriorAzul = true;
+
+      anteriorNaranja = false;
+
+      tiempoUltimaLinea =
+        ahora;
+
+
+      Serial.print(
+        "AZUL #"
+      );
+
+      Serial.println(
+        contadorAzul
+      );
     }
-    else if (line == 0) {
-      lastWasOrange = false;
-      lastWasBlue   = false;
+
+
+    // ── Sin línea ─────────────────────────────────────────
+
+    else if (
+      linea == 0
+    ) {
+
+      anteriorNaranja = false;
+
+      anteriorAzul = false;
     }
   }
 
-  // ── Stop condition: 12 orange + 1 blue ─────────────────
-  if (orangeCount >= TOTAL_ORANGE_LINES && blueCount >= 1) {
-    finished = true;
-    stopMotor();
-    steeringServo.write(SERVO_CENTER);
-    Serial.println("3 LAPS COMPLETE - STOPPED!");
+
+  // ───────────────────────────────────────────────────────
+  // Condición de parada:
+  //
+  // 12 líneas naranjas + 1 línea azul
+  // = 3 vueltas completas
+  // ───────────────────────────────────────────────────────
+
+  if (
+    contadorNaranja >=
+    TOTAL_LINEAS_NARANJAS &&
+    contadorAzul >= 1
+  ) {
+
+    terminado = true;
+
+
+    detenerMotor();
+
+
+    servoDireccion.write(
+      SERVO_CENTRO
+    );
+
+
+    Serial.println(
+      "3 VUELTAS COMPLETAS - DETENIDO"
+    );
+
+
     return;
   }
 
-  // ── Drive ───────────────────────────────────────────────
-  if (running) {
-    wallFollow();
+
+  // ───────────────────────────────────────────────────────
+  // Conducción
+  // ───────────────────────────────────────────────────────
+
+  if (
+    funcionando
+  ) {
+
+    seguirParedes();
   }
 }
