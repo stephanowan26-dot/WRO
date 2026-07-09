@@ -1,112 +1,203 @@
-PROTOTYPE CODE 1:
-
-
-// ─────────────────────────────────────────────
-//  4x Ultrasonic Distance Sensor - Arduino Mega
-//  Sensors: Front, Back, Left, Right
-// ─────────────────────────────────────────────
-
-// ── Pin definitions ──────────────────────────
-#define TRIG_L 24
-#define ECHO_L 22
-
-#define TRIG_B 28
-#define ECHO_B 26
-
-#define TRIG_F 30
-#define ECHO_F 32
-
-#define TRIG_R 50
-#define ECHO_R 52
-
-// ── Config ────────────────────────────────────
-#define SOUND_SPEED     0.034   // cm per microsecond
-#define MAX_DISTANCE    400     // cm - beyond this = out of range
-#define READ_INTERVAL   100     // ms between full sensor sweeps
+// CÓDIGO DE PROTOTIPO 1
 
 // ─────────────────────────────────────────────
-//  Read distance from a single sensor (cm)
-//  Returns -1 if out of range or no echo
+//  Sensor de distancia ultrasónico x4 - Arduino Mega
+//  Sensores: Frontal, Trasero, Izquierdo, Derecho
 // ─────────────────────────────────────────────
-float readDistance(int trigPin, int echoPin) {
-  // Clear trig pin
-  digitalWrite(trigPin, LOW);
+
+// ── Definición de pines ──────────────────────
+#define TRIG_IZQUIERDA 24
+#define ECO_IZQUIERDA 22
+
+#define TRIG_TRASERO 28
+#define ECO_TRASERO 26
+
+#define TRIG_FRONTAL 30
+#define ECO_FRONTAL 32
+
+#define TRIG_DERECHA 50
+#define ECO_DERECHA 52
+
+// ── Configuración ─────────────────────────────
+#define VELOCIDAD_SONIDO   0.034   // cm por microsegundo
+#define DISTANCIA_MAXIMA   400     // cm - más allá de esto = fuera de rango
+#define INTERVALO_LECTURA  100     // ms entre lecturas completas de sensores
+
+// ─────────────────────────────────────────────
+//  Leer distancia de un solo sensor (cm)
+//  Devuelve -1 si está fuera de rango o no recibe eco
+// ─────────────────────────────────────────────
+float leerDistancia(int pinTrig, int pinEco) {
+
+  // Limpiar pin TRIG
+  digitalWrite(pinTrig, LOW);
   delayMicroseconds(2);
 
-  // Send 10us pulse
-  digitalWrite(trigPin, HIGH);
+  // Enviar pulso de 10 us
+  digitalWrite(pinTrig, HIGH);
   delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  digitalWrite(pinTrig, LOW);
 
-  // Measure echo duration (timeout = 30ms)
-  long duration = pulseIn(echoPin, HIGH, 30000);
+  // Medir duración del eco (tiempo máximo = 30 ms)
+  long duracion = pulseIn(pinEco, HIGH, 30000);
 
-  if (duration == 0) return -1;  // No echo received
+  if (duracion == 0) {
+    return -1;  // No se recibió eco
+  }
 
-  float distance = duration * SOUND_SPEED / 2.0;
+  float distancia =
+    duracion * VELOCIDAD_SONIDO / 2.0;
 
-  if (distance > MAX_DISTANCE) return -1;  // Out of range
+  if (distancia > DISTANCIA_MAXIMA) {
+    return -1;  // Fuera de rango
+  }
 
-  return distance;
+  return distancia;
 }
 
 // ─────────────────────────────────────────────
-//  Print a distance reading with label
+//  Imprimir una lectura de distancia con etiqueta
 // ─────────────────────────────────────────────
-void printDistance(const char* label, float dist) {
-  Serial.print(label);
+void imprimirDistancia(
+  const char* etiqueta,
+  float distancia
+) {
+
+  Serial.print(etiqueta);
   Serial.print(": ");
-  if (dist < 0) {
-    Serial.print("OUT OF RANGE");
+
+  if (distancia < 0) {
+
+    Serial.print("FUERA DE RANGO");
+
   } else {
-    Serial.print(dist, 1);   // 1 decimal place
+
+    Serial.print(
+      distancia,
+      1
+    );  // 1 decimal
+
     Serial.print(" cm");
   }
-  Serial.print("   ");       // spacing between readings
+
+  Serial.print("   ");  // Espacio entre lecturas
 }
 
 // ─────────────────────────────────────────────
-//  Setup
+//  Configuración inicial
 // ─────────────────────────────────────────────
 void setup() {
+
   Serial.begin(9600);
 
-  // Set all trig pins as OUTPUT, echo pins as INPUT
-  int trigPins[] = { TRIG_L, TRIG_B, TRIG_F, TRIG_R };
-  int echoPins[] = { ECHO_L, ECHO_B, ECHO_F, ECHO_R };
+  // Configurar todos los pines TRIG como OUTPUT
+  // y los pines ECHO como INPUT
+
+  int pinesTrig[] = {
+    TRIG_IZQUIERDA,
+    TRIG_TRASERO,
+    TRIG_FRONTAL,
+    TRIG_DERECHA
+  };
+
+  int pinesEco[] = {
+    ECO_IZQUIERDA,
+    ECO_TRASERO,
+    ECO_FRONTAL,
+    ECO_DERECHA
+  };
 
   for (int i = 0; i < 4; i++) {
-    pinMode(trigPins[i], OUTPUT);
-    pinMode(echoPins[i], INPUT);
-    digitalWrite(trigPins[i], LOW);
+
+    pinMode(
+      pinesTrig[i],
+      OUTPUT
+    );
+
+    pinMode(
+      pinesEco[i],
+      INPUT
+    );
+
+    digitalWrite(
+      pinesTrig[i],
+      LOW
+    );
   }
 
-  Serial.println("=================================");
-  Serial.println("  4x Ultrasonic Sensor Monitor  ");
-  Serial.println("=================================");
+  Serial.println(
+    "================================="
+  );
+
+  Serial.println(
+    " Monitor de 4 sensores ultrasonicos "
+  );
+
+  Serial.println(
+    "================================="
+  );
+
   delay(500);
 }
 
 // ─────────────────────────────────────────────
-//  Loop
+//  Bucle principal
 // ─────────────────────────────────────────────
 void loop() {
-  float distF = readDistance(TRIG_F, ECHO_F);
-  float distB = readDistance(TRIG_B, ECHO_B);
-  float distL = readDistance(TRIG_L, ECHO_L);
-  float distR = readDistance(TRIG_R, ECHO_R);
 
-  printDistance("FRONT", distF);
-  printDistance("BACK",  distB);
-  printDistance("LEFT",  distL);
-  printDistance("RIGHT", distR);
+  float distanciaFrontal =
+    leerDistancia(
+      TRIG_FRONTAL,
+      ECO_FRONTAL
+    );
 
-  Serial.println();   // newline after all 4 readings
+  float distanciaTrasera =
+    leerDistancia(
+      TRIG_TRASERO,
+      ECO_TRASERO
+    );
 
-  delay(READ_INTERVAL);
+  float distanciaIzquierda =
+    leerDistancia(
+      TRIG_IZQUIERDA,
+      ECO_IZQUIERDA
+    );
+
+  float distanciaDerecha =
+    leerDistancia(
+      TRIG_DERECHA,
+      ECO_DERECHA
+    );
+
+
+  imprimirDistancia(
+    "FRONTAL",
+    distanciaFrontal
+  );
+
+  imprimirDistancia(
+    "TRASERO",
+    distanciaTrasera
+  );
+
+  imprimirDistancia(
+    "IZQUIERDA",
+    distanciaIzquierda
+  );
+
+  imprimirDistancia(
+    "DERECHA",
+    distanciaDerecha
+  );
+
+
+  // Nueva línea después de las 4 lecturas
+  Serial.println();
+
+
+  delay(
+    INTERVALO_LECTURA
+  );
 }
 
-
-
-This was our first prototype code.
-
+// Este fue nuestro primer código prototipo.
