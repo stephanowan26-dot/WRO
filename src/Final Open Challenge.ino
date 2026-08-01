@@ -1,9 +1,14 @@
 // ═══════════════════════════════════════════════════════
-//  WRO 2026 - OPEN CHALLENGE - 3 VUELTAS
-//  Detección automática de dirección
-//  CCW = solo sensor izquierdo | CW = solo sensor derecho
-//  Cooldown de 650ms después de cada esquina
-//  Para 250ms después de la línea naranja número 12
+//  WRO 2026 - DESAFÍO OPEN - FINAL
+//  Detección automática de dirección - la primera esquina fija la dirección
+//  CCW = detección de hueco con sensor IZQUIERDO
+//  CW  = detección de hueco con sensor DERECHO
+//  Sin conteo de vueltas - corre indefinidamente
+//
+//  ARREGLO DE INTERFERENCIA: una vez fijada la dirección, el
+//  ultrasónico opuesto nunca se vuelve a activar. Dos sensores
+//  pitando seguido dejan que uno capte el eco del otro, dando
+//  una lectura falsa de ~57cm en el hueco que bloqueaba el giro.
 // ═══════════════════════════════════════════════════════
 
 #include <Servo.h>
@@ -11,8 +16,8 @@
 // ── Servo ────────────────────────────────────────────────
 Servo steeringServo;
 #define SERVO_PIN    9
-#define SERVO_CENTER 90
-#define SERVO_LEFT   40
+#define SERVO_CENTER 93
+#define SERVO_LEFT   46
 #define SERVO_RIGHT  140
 
 // ── Motor ────────────────────────────────────────────────
@@ -21,47 +26,37 @@ Servo steeringServo;
 #define IN2  10
 #define SPEED_FULL  200
 
-// ── Ultrasonicos ─────────────────────────────────────────
+// ── Ultrasónicos ─────────────────────────────────────────
 #define TRIG_L  24
 #define ECHO_L  22
 #define TRIG_R  50
 #define ECHO_R  52
 
-// ── Sensor de color ──────────────────────────────────────
-#define S0   34
-#define S1   36
-#define S2   38
-#define S3   40
-#define OUT  42
-
-// Valores calibrados:
-// BLANCO:  R~21 G~23 B~7
-// NARANJA: R~24 G~51 B~13 → G > 35 Y R < 40
-#define ORANGE_G_MIN  35
-#define ORANGE_R_MAX  40
-
 // ── Configuración ────────────────────────────────────────
-#define CORNER_DIST      120  // cm - pared lejos = esquina detectada
-#define MIN_TURN_TIME    900  // ms - tiempo mínimo de giro
-#define CORNER_COOLDOWN  650  // ms - cooldown después de cada esquina
-#define STOP_DELAY       250  // ms - rueda después de la línea 12 y para
+#define CORNER_DIST        92  // cm - pared lejos = esquina detectada
+#define MIN_TURN_TIME_CCW  875  // ms - giro izquierda CCW
+#define MIN_TURN_TIME_CW   875  // ms - giro derecha CW
+#define CORNER_COOLDOWN    1500  // ms - espera después de cada esquina
+#define PING_GAP            60  // ms - separación mínima entre dos pings
+                                // Solo se usa antes de saber la dirección,
+                                // cuando aún hay que leer ambos sensores.
+#define TURN_COUNT_COOLDOWN     500  // ms - espacio mínimo entre el conteo de dos giros
+#define TOTAL_TURNS_TO_STOP      12  // número de giros (esquinas) antes de parar
+#define STOP_DELAY_AFTER_LAST_TURN_MS 900  // ms - esperar esto después del
+                                             // último giro antes de la parada total
+                                             // cambia este número para ajustarlo
 
 // ── Estado de dirección ──────────────────────────────────
 enum Direction { UNKNOWN, CCW, CW };
 Direction direction = UNKNOWN;
 
-// ── Conteo de vueltas ────────────────────────────────────
-#define TOTAL_ORANGE  12
-int orangeCount    = 0;
-bool lastWasOrange = false;
-unsigned long lastLineTime   = 0;
 unsigned long lastCornerTime = 0;
-#define LINE_COOLDOWN 1500
-
-bool finished = false;
+unsigned long lastTurnCountTime = 0;
+int turnCount = 0;
+bool deadStopped = false;
 
 // ─────────────────────────────────────────────────────────
-//  Leer distancia ultrasónico (cm)
+//  Leer distancia ultrasónica (cm)
 // ─────────────────────────────────────────────────────────
 float readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
@@ -74,27 +69,6 @@ float readDistance(int trigPin, int echoPin) {
   float dist = duration * 0.034 / 2.0;
   if (dist > 400) return 999;
   return dist;
-}
-
-// ─────────────────────────────────────────────────────────
-//  Leer canal del sensor de color
-// ─────────────────────────────────────────────────────────
-int readChannel(int s2val, int s3val) {
-  digitalWrite(S2, s2val);
-  digitalWrite(S3, s3val);
-  delay(10);
-  return pulseIn(OUT, LOW, 100000);
-}
-
-// ─────────────────────────────────────────────────────────
-//  Detectar línea naranja
-//  Retorna: 0 = nada, 1 = naranja
-// ─────────────────────────────────────────────────────────
-int detectLine() {
-  int r = readChannel(LOW, LOW);
-  int g = readChannel(HIGH, HIGH);
-  if (g > ORANGE_G_MIN && r < ORANGE_R_MAX) return 1;
-  return 0;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -113,60 +87,37 @@ void stopMotor() {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Contar líneas naranjas
-//  Después de la 12va → espera 250ms → para
+//  Ejecutar giro en esquina - por tiempo puro, SIN bucle while
 // ─────────────────────────────────────────────────────────
-void countLines() {
-  unsigned long now = millis();
-  if (now - lastLineTime > LINE_COOLDOWN) {
-    int line = detectLine();
-    if (line == 1 && !lastWasOrange) {
-      orangeCount++;
-      lastWasOrange = true;
-      lastLineTime  = now;
-      Serial.print("NARANJA #");
-      Serial.print(orangeCount);
-      Serial.print(" / ");
-      Serial.println(TOTAL_ORANGE);
-
-      if (orangeCount >= TOTAL_ORANGE) {
-        Serial.println("12 NARANJAS - parando en 250ms!");
-        delay(STOP_DELAY);
-        finished = true;
-        stopMotor();
-        steeringServo.write(SERVO_CENTER);
-        Serial.println("3 VUELTAS COMPLETAS - PARADO!");
-      }
-    }
-    else if (line == 0) {
-      lastWasOrange = false;
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-//  Ejecutar giro en esquina
-// ─────────────────────────────────────────────────────────
-void doTurn(int servoAngle, int checkTrig, int checkEcho) {
+void doTurn(int servoAngle, int turnTime) {
   Serial.println("ESQUINA DETECTADA - GIRANDO!");
   steeringServo.write(servoAngle);
   driveForward();
-  delay(MIN_TURN_TIME);
-
-  while (readDistance(checkTrig, checkEcho) > CORNER_DIST) {
-    steeringServo.write(servoAngle);
-    driveForward();
-    Serial.println("Todavia girando...");
-  }
-
-  Serial.println("Esquina lista - recto!");
+  delay(turnTime);
   steeringServo.write(SERVO_CENTER);
   lastCornerTime = millis();
+
+  // ── Contador de giros/vueltas ─────────────────────────
+  if (millis() - lastTurnCountTime > TURN_COUNT_COOLDOWN) {
+    turnCount++;
+    lastTurnCountTime = millis();
+    Serial.print("CONTEO DE GIROS: ");
+    Serial.println(turnCount);
+
+    if (turnCount >= TOTAL_TURNS_TO_STOP) {
+      delay(STOP_DELAY_AFTER_LAST_TURN_MS);
+      stopMotor();
+      steeringServo.write(SERVO_CENTER);
+      deadStopped = true;
+      Serial.println("PARADA TOTAL - se alcanzó el conteo de giros");
+    }
+  }
+
   delay(300);
 }
 
 // ─────────────────────────────────────────────────────────
-//  Setup
+//  Configuración
 // ─────────────────────────────────────────────────────────
 void setup() {
   steeringServo.attach(SERVO_PIN);
@@ -183,63 +134,78 @@ void setup() {
   pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
   pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
 
-  pinMode(S0, OUTPUT); pinMode(S1, OUTPUT);
-  pinMode(S2, OUTPUT); pinMode(S3, OUTPUT);
-  pinMode(OUT, INPUT);
-  digitalWrite(S0, HIGH);
-  digitalWrite(S1, LOW);
-
-  Serial.println("WRO 2026 - Open Challenge");
-  Serial.println("Direccion se detecta automaticamente en la primera esquina.");
+  Serial.println("WRO 2026 - Final Open Challenge");
   Serial.println("Arrancando en 5 segundos...");
   delay(5000);
   Serial.println("ARRANCA!");
 }
 
 // ─────────────────────────────────────────────────────────
-//  Loop
+//  Bucle principal
 // ─────────────────────────────────────────────────────────
 void loop() {
 
-  if (finished) {
-    stopMotor();
-    steeringServo.write(SERVO_CENTER);
-    return;
+  // ── Parada total - detiene para siempre después de TOTAL_TURNS_TO_STOP ──
+  if (deadStopped) {
+    return;  // ya está parado, no hace nada más
   }
 
-  countLines();
+  float distL = 999;
+  float distR = 999;
 
-  float distL = readDistance(TRIG_L, ECHO_L);
-  float distR = readDistance(TRIG_R, ECHO_R);
+  // ── Lectura de sensores - nunca dos pings seguidos ───
+  if (direction == UNKNOWN) {
+    // Dirección aún no fijada: se necesitan ambos sensores, pero
+    // espaciados para que el primer ping muera antes de que dispare el segundo.
+    distL = readDistance(TRIG_L, ECHO_L);
+    delay(PING_GAP);
+    distR = readDistance(TRIG_R, ECHO_R);
 
-  Serial.print("I:"); Serial.print(distL);
-  Serial.print(" D:"); Serial.println(distR);
+    Serial.print("I:"); Serial.print(distL);
+    Serial.print(" D:"); Serial.println(distR);
+  }
+  else if (direction == CCW) {
+    // Solo se activa el sensor IZQUIERDO. El DERECHO está apagado.
+    distL = readDistance(TRIG_L, ECHO_L);
+
+    Serial.print("I:"); Serial.print(distL);
+    Serial.println(" D:OFF");
+  }
+  else {  // CW
+    // Solo se activa el sensor DERECHO. El IZQUIERDO está apagado.
+    distR = readDistance(TRIG_R, ECHO_R);
+
+    Serial.print("I:OFF");
+    Serial.print(" D:"); Serial.println(distR);
+  }
 
   bool cooldownOk = (millis() - lastCornerTime > CORNER_COOLDOWN);
 
   if (direction == UNKNOWN) {
     if (cooldownOk && distL > CORNER_DIST) {
       direction = CCW;
-      Serial.println("DIRECCION: CCW - solo sensor izquierdo");
-      doTurn(SERVO_LEFT, TRIG_L, ECHO_L);
+      Serial.println("DIRECCION: CCW");
+      doTurn(SERVO_LEFT, MIN_TURN_TIME_CCW);
     }
-    else if (cooldownOk && distR > CORNER_DIST) {
+    else if (cooldownOk && distR > CORNER_DIST && distR < 400) {
       direction = CW;
-      Serial.println("DIRECCION: CW - solo sensor derecho");
-      doTurn(SERVO_RIGHT, TRIG_R, ECHO_R);
+      Serial.println("DIRECCION: CW");
+      doTurn(SERVO_RIGHT, MIN_TURN_TIME_CW);
     }
   }
   else if (direction == CCW) {
-    if (cooldownOk && distL > CORNER_DIST) {
-      doTurn(SERVO_LEFT, TRIG_L, ECHO_L);
+    if (cooldownOk && distL > CORNER_DIST ) {
+      doTurn(SERVO_LEFT, MIN_TURN_TIME_CCW);
     }
   }
   else if (direction == CW) {
-    if (cooldownOk && distR > CORNER_DIST) {
-      doTurn(SERVO_RIGHT, TRIG_R, ECHO_R);
+    if (cooldownOk && distR > CORNER_DIST ) {
+      doTurn(SERVO_RIGHT, MIN_TURN_TIME_CW);
     }
   }
 
-  steeringServo.write(SERVO_CENTER);
-  driveForward();
+  if (!deadStopped) {
+    steeringServo.write(SERVO_CENTER);
+    driveForward();
+  }
 }
