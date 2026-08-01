@@ -1,1 +1,38 @@
+#include <Sentry.h>
+#include <Wire.h>
+typedef Sentry2 Sentry;
+Sentry sentry;
 
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  
+  Serial.println("Conectando a Sentry2...");
+  while (SENTRY_OK != sentry.begin(&Wire)) {
+    Serial.println("Esperando...");
+    delay(500);
+  }
+  Serial.println("¡Sentry2 conectado!");
+  sentry.VisionBegin(Sentry::kVisionBlob);
+  Serial.println("¡Listo! Muestra un blob rojo o verde a la camara.");
+}
+
+void loop() {
+  int detectados = sentry.GetValue(Sentry::kVisionBlob, kStatus);
+  if (detectados > 0) {
+    for (int i = 1; i <= detectados; i++) {
+      int label = sentry.GetValue(Sentry::kVisionBlob, kLabel, i);
+      int x     = sentry.GetValue(Sentry::kVisionBlob, kXValue, i);
+      if (label == 13) {
+        Serial.print("¡ROJO detectado! X:");
+        Serial.println(x);
+      } else if (label == 14) {
+        Serial.print("¡VERDE detectado! X:");
+        Serial.println(x);
+      }
+    }
+  } else {
+    Serial.println("Nada detectado");
+  }
+  delay(200);
+}
