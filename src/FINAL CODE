@@ -1,0 +1,221 @@
+#include <Servo.h>
+
+// ====== Pines ======
+const int SERVO_PIN = 6;
+const int FRONT_TRIG_PIN = 2;
+const int FRONT_ECHO_PIN = 3;
+const int RIGHT_TRIG_PIN = 22;
+const int RIGHT_ECHO_PIN = 23;
+
+// L298N (Mega: 7 y 12 son PWM)
+const int ENA = 7;
+const int IN1 = 8;
+const int IN2 = 9;
+const int ENB = 12;
+const int IN3 = 11;
+const int IN4 = 10;
+
+// Piezo
+const int PIEZO_PIN = 26;
+
+// ====== Config ======
+const int   CENTER_ANGLE           = 90;
+const int   STEER_LEFT             = 45;    // hacia la izquierda
+const int   STEER_RIGHT            = 130;   // hacia la derecha (solicitado)
+const int   SPEED_FWD              = 130;   // base
+const int   SPEED_TURN             = 115;   // base
+const int   SPEED_BACK             = 110;   // base
+
+const long  THRESHOLD_FRONT_CM     = 35;    // umbral frontal
+const long  TARGET_RIGHT_CM        = 40;    // ahora 40 cm por defecto
+const long  TOL_CM                 = 4;     // tolerancia +/- 4 cm
+
+// RIGHT beep:
+const long RIGHT_BEEP_CM           = 30;
+const long RIGHT_BEEP_COOLDOWN_MS  = 700;
+
+// Tiempos (ms)
+const int BEEP_MS           = 200;
+const int BACK_MS           = 1800;
+const int TURN_MS           = 1800;
+const int STRAIGHTEN_MS     = 300;
+const int CORRECTION_MS     = 1000;   // 1 segundo corregir, como pediste
+const int COOLDOWN_MS       = 900;
+
+// velocidad específica durante corrección (+30 sobre SPEED_TURN)
+const int CORRECTION_SPEED  = SPEED_TURN + 30; // aumento de 30 durante corrección
+
+// Helpers / estado
+enum State { FWD=1, ALERT=2, BACK=3, TURN=4, STRAIGHTEN=5, CORRECT=6, IDLE=7 };
+
+Servo myservo;
+unsigned long lastCorrectionTime = 0;
+unsigned long lastRightBeepTime = 0;
+
+// ---------- Prototipos ----------
+long readDistanceOnceCm(int trigPin, int echoPin);
+long readDistanceFilteredCm(int trigPin, int echoPin, uint8_t samples = 3, uint8_t gap_ms = 12);
+void moveForward(int speedVal);
+void moveBackward(int speedVal);
+void stopMotors();
+void printState(State s, const char* msg);
+
+void setup() {
+  Serial.begin(115200);
+  myservo.attach(SERVO_PIN);
+  myservo.write(CENTER_ANGLE);
+
+  pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  stopMotors();
+
+  pinMode(FRONT_TRIG_PIN, OUTPUT); pinMode(FRONT_ECHO_PIN, INPUT);
+  pinMode(RIGHT_TRIG_PIN, OUTPUT); pinMode(RIGHT_ECHO_PIN, INPUT);
+
+  pinMode(PIEZO_PIN, OUTPUT);
+
+  Serial.println("READY: correction system with RIGHT sensor (TARGET=40 +/-4cm, correction=1s).");
+}
+
+void loop() {
+  // Por defecto: avanzar centrado
+  myservo.write(CENTER_ANGLE);
+  moveForward(SPEED_FWD);
+  printState(FWD, "Forward...");
+
+  while (true) {
+    long dF = readDistanceFilteredCm(FRONT_TRIG_PIN, FRONT_ECHO_PIN, 3, 12);
+    long dR = readDistanceFilteredCm(RIGHT_TRIG_PIN, RIGHT_ECHO_PIN, 3, 12);
+    unsigned long now = millis();
+
+    // RIGHT beep (opcional)
+    if (dR > 0 && dR < RIGHT_BEEP_CM && (now - lastRightBeepTime) > RIGHT_BEEP_COOLDOWN_MS) {
+      Serial.print("Right beep (cm): "); Serial.println(dR);
+      tone(PIEZO_PIN, 1200, BEEP_MS);
+      lastRightBeepTime = now;
+    }
+
+    // 1) Evasión frontal (rutina original)
+    if (dF > 0 && dF < THRESHOLD_FRONT_CM) {
+      Serial.print("Front detected @ "); Serial.print(dF); Serial.println(" cm -> evasión");
+      printState(ALERT, "Beep + back + turn-left");
+
+      tone(PIEZO_PIN, 1000, BEEP_MS);
+      delay(BEEP_MS + 10);
+      noTone(PIEZO_PIN);
+
+      // retrocede
+      printState(BACK, "Backing...");
+      moveBackward(SPEED_BACK);
+      delay(BACK_MS);
+
+      // girar izquierda
+      myservo.write(STEER_LEFT);
+      printState(TURN, "Turning left...");
+      moveForward(SPEED_TURN);
+      delay(TURN_MS);
+
+      // enderezar
+      myservo.write(CENTER_ANGLE);
+      printState(STRAIGHTEN, "Straightening...");
+      delay(STRAIGHTEN_MS);
+
+      // cooldown
+      printState(IDLE, "Cooldown after evasive...");
+      delay(300);
+      break; // volver a avanzar
+    }
+
+    // 2) Corrección de desviación lateral usando lectura RIGHT
+    if (dR > 0 && (now - lastCorrectionTime) > (unsigned long)COOLDOWN_MS) {
+      long diff = dR - TARGET_RIGHT_CM;
+
+      if (diff < -TOL_CM) {
+        // dR mucho menor que target → estamos demasiado cerca (orientación a la derecha)
+        Serial.print("CORRECT: too close to right (dR="); Serial.print(dR);
+        Serial.print(" target="); Serial.print(TARGET_RIGHT_CM);
+        Serial.println(") -> steer LEFT to correct");
+
+        // beep opcional
+        tone(PIEZO_PIN, 1400, BEEP_MS);
+        delay(BEEP_MS + 5); noTone(PIEZO_PIN);
+
+        // poner ruedas a la izquierda y avanzar CORRECTION_MS con velocidad aumentada
+        myservo.write(STEER_LEFT);
+        moveForward(CORRECTION_SPEED);
+        delay(CORRECTION_MS);
+        myservo.write(CENTER_ANGLE);
+        delay(STRAIGHTEN_MS);
+
+        lastCorrectionTime = millis();
+        delay(120);
+        break;
+      }
+      else if (diff > TOL_CM) {
+        // dR mucho mayor que target → estamos lejos (orientación a la izquierda)
+        Serial.print("CORRECT: too far from right (dR="); Serial.print(dR);
+        Serial.print(" target="); Serial.print(TARGET_RIGHT_CM);
+        Serial.println(") -> steer RIGHT to correct");
+
+        tone(PIEZO_PIN, 1400, BEEP_MS);
+        delay(BEEP_MS + 5); noTone(PIEZO_PIN);
+
+        // poner ruedas a la derecha y avanzar CORRECTION_MS con velocidad aumentada
+        myservo.write(STEER_RIGHT);
+        moveForward(CORRECTION_SPEED);
+        delay(CORRECTION_MS);
+        myservo.write(CENTER_ANGLE);
+        delay(STRAIGHTEN_MS);
+
+        lastCorrectionTime = millis();
+        delay(120);
+        break;
+      }
+    }
+
+    // respirito
+    delay(25);
+  } // end while
+}
+
+// ---------- Funciones auxiliares ----------
+long readDistanceOnceCm(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH); delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  long us = pulseIn(echoPin, HIGH, 30000UL); // timeout 30 ms
+  if (us == 0) return -1;
+  return (us * 34L) / 2000L; // ≈ cm
+}
+
+long readDistanceFilteredCm(int trigPin, int echoPin, uint8_t samples, uint8_t gap_ms) {
+  long best = -1;
+  for (uint8_t i = 0; i < samples; i++) {
+    long d = readDistanceOnceCm(trigPin, echoPin);
+    if (d > 0 && (best < 0 || d < best)) best = d;
+    delay(gap_ms);
+  }
+  return best;
+}
+
+void moveForward(int speedVal) {
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedVal);
+  analogWrite(ENB, speedVal);
+}
+void moveBackward(int speedVal) {
+  digitalWrite(IN1, LOW);  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);
+  analogWrite(ENA, speedVal);
+  analogWrite(ENB, speedVal);
+}
+void stopMotors() {
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+}
+void printState(State s, const char* msg) {
+  Serial.print("["); Serial.print(millis()); Serial.print("] ");
+  Serial.print(msg);
+  Serial.print("  (state:"); Serial.print((int)s); Serial.println(")");
+}

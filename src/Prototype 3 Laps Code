@@ -1,0 +1,87 @@
+#include <Servo.h>
+
+Servo myservo;
+
+// Servo y dirección
+const int SERVO_PIN    = 6;
+const int CENTER_ANGLE = 90;
+const int LEFT_ANGLE   = 50;   // giro a la izquierda
+
+// L298N (Mega: 7 y 12 tienen PWM)
+const int ENA = 7;
+const int IN1 = 8;
+const int IN2 = 9;
+const int ENB = 12;
+const int IN3 = 11;
+const int IN4 = 10;
+
+// Velocidades (0–255)
+const int SPEED_STRAIGHT = 110;
+const int SPEED_TURN     = 90;
+
+// Estados para Serial Plotter
+enum State { PAUSE=1, STRAIGHT=2, TURNING=3, STRAIGHTEN=4 };
+
+void setup() {
+  Serial.begin(115200);
+  myservo.attach(SERVO_PIN);
+  myservo.write(CENTER_ANGLE);
+
+  pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+
+  stopMotors();
+  Serial.println("Boot: centered & stopped.");
+}
+
+void moveForward(int speedVal) {
+  digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  analogWrite(ENA, speedVal);
+  analogWrite(ENB, speedVal);
+}
+void stopMotors() { analogWrite(ENA, 0); analogWrite(ENB, 0); }
+
+void countdown(const char* label, State s, int seconds) {
+  unsigned long t0 = millis();
+  Serial.print(label); Serial.print(" for "); Serial.print(seconds); Serial.println("s");
+  for (int i=1; i<=seconds; i++) {
+    Serial.print(label); Serial.print(" second "); Serial.println(i);
+    Serial.print("state:"); Serial.println((int)s); // para Serial Plotter
+    delay(1000);
+  }
+  unsigned long dt = millis() - t0;
+  Serial.print(label); Serial.print(" done in "); Serial.print(dt/1000.0, 3); Serial.println(" s");
+}
+
+void loop() {
+  // ---- Pausa inicial 2 s ----
+  stopMotors();
+  myservo.write(CENTER_ANGLE);
+  countdown("Initial pause", PAUSE, 2);    // 2 s
+
+  // ---- Recta 6 s ----
+  myservo.write(CENTER_ANGLE);
+  moveForward(SPEED_STRAIGHT);
+  countdown("Straight", STRAIGHT, 6);      // 6 s
+
+  // ---- Giro izquierda 2.5 s ----
+  moveForward(SPEED_TURN);
+  myservo.write(LEFT_ANGLE);
+  Serial.println("Turning left for 2.5s");
+  Serial.print("state:"); Serial.println((int)TURNING);
+  delay(2500);                              // 2.5 s
+  Serial.println("Turning left done.");
+
+  // ---- Enderezar 0.5 s ----
+  myservo.write(CENTER_ANGLE);
+  Serial.println("Straightening for 0.5s");
+  Serial.print("state:"); Serial.println((int)STRAIGHTEN);
+  delay(500);                               // 0.5 s
+
+  // ---- Pausa 1 s ----
+  stopMotors();
+  countdown("Pause", PAUSE, 1);             // 1 s
+
+  // …se repite el ciclo
+}
