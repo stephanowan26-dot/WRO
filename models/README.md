@@ -4,7 +4,7 @@ These are the files for the laser cutter/3D printer
 2. PIPE2 (2).stl : Camera Rod 3D Model Prototype
 3. Sizzling Habbi (3).stl : Ultra sonic sensor holder
 4. Sizzling Habbi (6).stl : Camera Rod 3D Model
-5. Super Blorr-Amur.stl : Chassis model
+5. WRO Volt Chasis.stl : Chassis model
 
 
 Estos son los archivos para la **cortadora láser** y la **impresora 3D**.
@@ -13,4 +13,4 @@ Estos son los archivos para la **cortadora láser** y la **impresora 3D**.
 2. **PIPE2 (2).stl** : Prototipo del modelo 3D del soporte de la cámara
 3. **Sizzling Habbi (3).stl** : Soporte del sensor ultrasónico
 4. **Sizzling Habbi (6).stl** : Modelo 3D del soporte de la cámara
-5. **Super Blorr-Amur.stl** : Modelo del chasis
+5. **WRO Volt Chasis.stl** : Modelo del chasis
