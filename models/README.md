@@ -9,3 +9,9 @@ Estos son los archivos para la **cortadora láser** y la **impresora 3D**.
 7. **Steering Axis Rod 1.stl** : Varilla del eje de dirección
 8. **WRO Volt Chasis.stl** : Modelo del chasis (versión final)
 9. **Wheel Pin.stl** : Pin que sostiene la rueda en su lugar
+
+---
+
+## Créditos
+
+El diseño del chasis se basó en **["Simple Arduino RC CAR"](https://www.thingiverse.com/thing:6667669)** por **T_Lab** (Thingiverse, junio 2024), que usamos como referencia y modificamos para adaptarlo a los componentes y dimensiones de "Volt".

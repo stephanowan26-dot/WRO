@@ -19,7 +19,8 @@ Este repositorio documenta todo el proceso de ingeniería detrás de **"Volt"**,
 7. [Errores que Encontramos y Cómo los Resolvimos](#errores-que-encontramos-y-cómo-los-resolvimos)
 8. [Videos de Rendimiento](#videos-de-rendimiento)
 9. [Instrucciones de Armado](#instrucciones-de-armado)
-10. [Mejoras Futuras Posibles](#mejoras-futuras-posibles)
+10. [Créditos](#créditos)
+11. [Mejoras Futuras Posibles](#mejoras-futuras-posibles)
 
 ---
 
@@ -240,6 +241,12 @@ Más detalles en [`video/README.md`](video/README.md).
 2. **Impresión 3D** — imprime las piezas del chasis y soportes con cualquier impresora compatible con STL: [`models/`](models)
 3. **Conexiones eléctricas** — sigue el diagrama esquemático para las conexiones entre Arduino, driver, sensores y batería: [`schemes/Circuit Final.png`](<schemes/Circuit%20Final.png>)
 4. **Cargar el código** — sube [`Final Open Challenge.ino`](src/Final%20Open%20Challenge.ino) o [`Final Obstacle Challenge.ino`](src/Final%20Obstacle%20Challenge.ino) según el desafío, usando Arduino IDE con las librerías `Servo.h`, `Wire.h` y `Sentry.h` (esta última de Tosee Intelligence).
+
+---
+
+## Créditos
+
+- **Chasis:** basado en [Simple Arduino RC CAR](https://www.thingiverse.com/thing:6667669) por **T_Lab** (Thingiverse, junio 2024), usado como referencia y modificado para adaptarlo a los componentes y dimensiones de "Volt". Ver [`models/README.md`](models/README.md#créditos).
 
 ---
 
