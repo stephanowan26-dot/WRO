@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-//  WRO 2026 - OBSTACLE CHALLENGE - TEST
+//  WRO 2026 - DESAFÍO DE OBSTÁCULOS - PRUEBA
 //  Rojo (13)  → giro derecha 300ms
 //  Verde (14) → giro izquierda 300ms
 //  Esquinas con sensor izquierdo o derecho (auto dirección)
@@ -26,7 +26,7 @@ Servo steeringServo;
 #define IN2  10
 #define SPEED_FULL  200
 
-// ── Ultrasonicos ─────────────────────────────────────────
+// ── Ultrasónicos ─────────────────────────────────────────
 #define TRIG_L  24
 #define ECHO_L  22
 #define TRIG_R  50
@@ -45,7 +45,7 @@ Servo steeringServo;
 // ── Configuración ────────────────────────────────────────
 #define CORNER_DIST      120  // cm - pared lejos = esquina
 #define MIN_TURN_TIME    900  // ms - tiempo mínimo de giro
-#define CORNER_COOLDOWN  650  // ms - cooldown después de esquina
+#define CORNER_COOLDOWN  650  // ms - tiempo de espera después de esquina
 #define STOP_DELAY       250  // ms - rueda después de línea 12 y para
 #define PILLAR_TURN_TIME 300  // ms - giro al detectar pilar
 
@@ -64,7 +64,7 @@ unsigned long lastCornerTime = 0;
 bool finished = false;
 
 // ─────────────────────────────────────────────────────────
-//  Leer distancia ultrasónico (cm)
+//  Leer distancia ultrasónica (cm)
 // ─────────────────────────────────────────────────────────
 float readDistance(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
@@ -195,7 +195,7 @@ void checkPillars() {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Setup
+//  Configuración
 // ─────────────────────────────────────────────────────────
 void setup() {
   // Servo primero siempre
@@ -211,7 +211,7 @@ void setup() {
   pinMode(IN2, OUTPUT);
   stopMotor();
 
-  // Ultrasonicos
+  // Ultrasónicos
   pinMode(TRIG_L, OUTPUT); pinMode(ECHO_L, INPUT);
   pinMode(TRIG_R, OUTPUT); pinMode(ECHO_R, INPUT);
 
@@ -222,7 +222,7 @@ void setup() {
   digitalWrite(S0, HIGH);
   digitalWrite(S1, LOW);
 
-  // Sentry2 I2C
+  // Sentry2 mediante I2C
   Wire.begin();
   Serial.println("Conectando Sentry2...");
   while (SENTRY_OK != sentry.begin(&Wire)) {
@@ -239,7 +239,7 @@ void setup() {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Loop
+//  Bucle principal
 // ─────────────────────────────────────────────────────────
 void loop() {
 
@@ -264,7 +264,7 @@ void loop() {
 
   bool cooldownOk = (millis() - lastCornerTime > CORNER_COOLDOWN);
 
-  // Dirección desconocida - chequea ambos sensores
+  // Dirección desconocida - revisa ambos sensores
   if (direction == UNKNOWN) {
     if (cooldownOk && distL > CORNER_DIST) {
       direction = CCW;
