@@ -1,16 +1,11 @@
-These are the files for the laser cutter/3D printer
-
-1. Copy of Super Blorr-Amur (2).stl : Axis 3D model
-2. PIPE2 (2).stl : Camera Rod 3D Model Prototype
-3. Sizzling Habbi (3).stl : Ultra sonic sensor holder
-4. Sizzling Habbi (6).stl : Camera Rod 3D Model
-5. WRO Volt Chasis.stl : Chassis model
-
-
 Estos son los archivos para la **cortadora láser** y la **impresora 3D**.
 
-1. **Copy of Super Blorr-Amur (2).stl** : Modelo 3D del eje
-2. **PIPE2 (2).stl** : Prototipo del modelo 3D del soporte de la cámara
-3. **Sizzling Habbi (3).stl** : Soporte del sensor ultrasónico
-4. **Sizzling Habbi (6).stl** : Modelo 3D del soporte de la cámara
-5. **WRO Volt Chasis.stl** : Modelo del chasis
+1. **Axis Pin.stl** : Pin de eje — permite que una pieza gire libremente (a diferencia de un clavo/pin fijo)
+2. **Nut.stl** : Tuerca
+3. **Prototype Chassis.stl** : Modelo 3D del chasis (versión prototipo)
+4. **Rear Axis.stl** : Eje trasero
+5. **Servo Steering Axis Holder.stl** : Soporte del eje de dirección del servo
+6. **Shaft for Wheels.stl** : Eje que sostiene las ruedas
+7. **Steering Axis Rod 1.stl** : Varilla del eje de dirección
+8. **WRO Volt Chasis.stl** : Modelo del chasis (versión final)
+9. **Wheel Pin.stl** : Pin que sostiene la rueda en su lugar
