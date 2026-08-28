@@ -2,21 +2,28 @@
 
 ![Volt en acción](video/volt-demo.gif)
 
-Este repositorio contiene los materiales de ingeniería del modelo de un vehículo autónomo que participa en la competencia WRO Future Engineers en la temporada 2026.
+**TEAM VOLT** — Lima, Perú — WRO Future Engineers 2026
 
-## Contenido
-
-* `t-photos` contiene 2 fotos del equipo (una oficial y una foto divertida con todos los miembros del equipo)
-* `v-photos` contiene 6 fotos del vehículo (de todos los lados, desde arriba y desde abajo)
-* `video` contiene el archivo video.md con el enlace a un video donde se demuestra la conducción autónoma en ambos desafíos
-* `schemes` contiene los diagramas esquemáticos en formato JPEG o PNG de los componentes electromecánicos, ilustrando todos los elementos electrónicos y motores utilizados en el vehículo y cómo se conectan entre sí
-* `src` contiene el código del software de control de todos los componentes que fueron programados para participar en la competencia
-* `models` contiene los archivos STL de los modelos utilizados por la impresora 3D para producir los elementos del vehículo, incluyendo los soportes de sensores y la montura de la cámara
-* `other` contiene documentación complementaria, incluyendo hojas de datos de componentes, bitácoras de pruebas y archivos de configuración auxiliares
+Este repositorio documenta todo el proceso de ingeniería detrás de **"Volt"**, nuestro vehículo autónomo para la competencia WRO Future Engineers 2026: desde los primeros prototipos de cada componente hasta el modelo y código final de competencia.
 
 ---
 
-## Equipo
+## Tabla de Contenidos
+
+1. [El Equipo](#el-equipo)
+2. [Resumen del Vehículo](#resumen-del-vehículo)
+3. [Contenido del Repositorio](#contenido-del-repositorio)
+4. [Del Prototipo al Modelo Final](#del-prototipo-al-modelo-final)
+5. [Arquitectura de Hardware](#arquitectura-de-hardware)
+6. [Arquitectura de Software](#arquitectura-de-software)
+7. [Errores que Encontramos y Cómo los Resolvimos](#errores-que-encontramos-y-cómo-los-resolvimos)
+8. [Videos de Rendimiento](#videos-de-rendimiento)
+9. [Instrucciones de Armado](#instrucciones-de-armado)
+10. [Mejoras Futuras Posibles](#mejoras-futuras-posibles)
+
+---
+
+## El Equipo
 
 **TEAM VOLT**
 
@@ -26,27 +33,85 @@ Este repositorio contiene los materiales de ingeniería del modelo de un vehícu
 | Stephano Wan Rong | 18 |
 | Aadidev Nappanveetil Akhilesh | 17 |
 
----
-
-## Introducción
-
-Nuestro equipo **TEAM VOLT** creó nuestro auto de conducción autónoma **"Volt"** para participar en la competencia WRO Future Engineers 2026 en Lima, Perú. "Volt" es un vehículo autónomo de cuatro ruedas diseñado para navegar de forma completamente independiente alrededor de un circuito de 3x3 metros, detectar y esquivar obstáculos de colores, y completar tres vueltas de manera precisa y repetible sin ninguna intervención humana.
-
-El nombre "Volt" refleja la energía y velocidad con la que nuestro equipo abordó cada etapa del desarrollo: desde el diseño mecánico hasta la integración de sensores y la programación del comportamiento autónomo.
-
-**Por favor, lee los archivos README.md en cada carpeta para comprender mejor nuestra documentación.**
+<table>
+  <tr>
+    <td align="center"><strong>Foto oficial</strong><br><img src="t-photos/T-photos%20wro%201.jpeg" width="380"></td>
+    <td align="center"><strong>Foto del equipo</strong><br><img src="t-photos/T-photo%20wro%202.jpeg" width="380"></td>
+  </tr>
+</table>
 
 ---
 
-## Visión General del Vehículo
+## Resumen del Vehículo
 
-"Volt" es un vehículo de tracción trasera con dirección delantera controlada por servomotor. Su arquitectura fue diseñada para ser modular, liviana y fácil de mantener durante las sesiones de competencia. El controlador principal es un **Arduino Mega 2560**, seleccionado por su amplia cantidad de pines digitales y su compatibilidad con las librerías de control de motores y sensores que utilizamos.
+"Volt" es un vehículo autónomo de cuatro ruedas, con tracción trasera y dirección delantera por servomotor, diseñado para navegar de forma completamente independiente un circuito de 3x3 metros, detectar y esquivar pilares de colores, y completar 3 vueltas de manera precisa y repetible, sin ninguna intervención humana.
 
-### Dimensiones y Peso
+El nombre "Volt" refleja la energía con la que el equipo abordó cada etapa: diseño mecánico, integración de sensores y programación del comportamiento autónomo.
 
-El vehículo cumple con los requisitos establecidos en las reglas de WRO 2026:
+**Dimensiones y peso** (dentro de las reglas de WRO 2026):
 - Dimensiones máximas: 300 x 200 mm de planta, 300 mm de altura
 - Peso total aproximado: bajo 1.5 kg
+
+---
+
+## Contenido del Repositorio
+
+| Carpeta | Contenido |
+|---|---|
+| [`t-photos`](t-photos) | Fotos del equipo |
+| [`v-photos`](v-photos) | Fotos del vehículo — prototipo y versión final, desde todos los lados |
+| [`video`](video) | Enlaces a los videos de rendimiento en YouTube (Open y Obstacle Challenge) |
+| [`schemes`](schemes) | Diagrama esquemático de los componentes electromecánicos y sus conexiones |
+| [`src`](src) | Todo el código de control — desde prototipos individuales hasta el software final |
+| [`models`](models) | Archivos STL para impresión 3D — chasis, ejes, soportes |
+| [`material`](material) | Lista completa de materiales usados en el robot |
+
+**Lee el README.md de cada carpeta para más detalle.**
+
+---
+
+## Del Prototipo al Modelo Final
+
+Nuestro desarrollo fue iterativo: probamos cada componente por separado antes de integrarlo, y el chasis, el código y las fotos del vehículo pasaron por varias versiones hasta llegar al modelo final de competencia.
+
+### Galería: Prototipo vs. Final
+
+<table>
+  <tr>
+    <td align="center" colspan="2"><strong>Chasis</strong></td>
+  </tr>
+  <tr>
+    <td align="center">Prototipo<br><em>(<a href="models/Prototype%20Chassis.stl">Prototype Chassis.stl</a>)</em></td>
+    <td align="center">Final<br><em>(<a href="models/WRO%20Volt%20Chasis.stl">WRO Volt Chasis.stl</a>)</em></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="v-photos/Prototype%20FrontPicture.jpg" width="320"></td>
+    <td align="center"><img src="v-photos/FINAL/Front%20Picture%20Final.png" width="320"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="v-photos/Top%20Picture%20Prototype.png" width="320"></td>
+    <td align="center"><img src="v-photos/FINAL/Top%20Photo%20Final.jpeg" width="320"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="v-photos/LeftSide%20Prototype.png" width="320"></td>
+    <td align="center"><img src="v-photos/FINAL/Left%20Side%20Photo%20Final.jpeg" width="320"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="v-photos/RightSide%20Prototype.png" width="320"></td>
+    <td align="center"><img src="v-photos/FINAL/Right%20Side%20Photo%20Final.jpeg" width="320"></td>
+  </tr>
+</table>
+
+### Línea de Tiempo del Desarrollo
+
+| Etapa | Qué hicimos |
+|---|---|
+| **1. Pruebas de componentes individuales** ([`src`](src): `Prototype Motor Test`, `Prototype Ultrasonic Code`) | Código mínimo para confirmar que cada sensor y motor funcionaba por separado antes de integrarlo al resto del sistema. |
+| **2. Primer código de conducción** ([`Prototype 3 Laps (Open Challenge) Code`](src/Prototype%203%20Laps%20%28Open%20Challenge%29%20Code)) | Primera versión capaz de dar vueltas completas al circuito, usada para probar la lógica de giro y de conteo de vueltas. |
+| **3. Prueba de esquinas sin interferencia** (base de [`Final Open Challenge.ino`](src/Final%20Open%20Challenge.ino)) | Detectamos y arreglamos el problema de cross-talk entre los dos sensores ultrasónicos (ver sección de errores). |
+| **4. Código Pre-Final** ([`Pre-Final Code 1`](src/Pre-Final%20Code%201)) | Integración de las correcciones anteriores en una versión más cercana a la de competencia. |
+| **5. Código final — Open Challenge** ([`Final Open Challenge.ino`](src/Final%20Open%20Challenge.ino)) | Detección automática de dirección, cooldown entre esquinas y parada automática tras 12 esquinas (3 vueltas). |
+| **6. Código final — Obstacle Challenge** ([`Final Obstacle Challenge.ino`](src/Final%20Obstacle%20Challenge.ino)) | Se añade la maniobra de salida de estacionamiento, detección de dirección por pared pegada, y evasión de pilares con pausa a media esquina para revisar la cámara. |
 
 ---
 
@@ -54,134 +119,137 @@ El vehículo cumple con los requisitos establecidos en las reglas de WRO 2026:
 
 ### Controlador Principal
 
-El cerebro del vehículo es un **Arduino Mega 2560**. Elegimos esta plataforma porque ofrece suficientes pines digitales para conectar simultáneamente cuatro sensores ultrasónicos, un sensor de color, una cámara de visión, un servo y el driver de motor, sin necesidad de multiplexores adicionales.
+El cerebro del vehículo es un **Arduino Mega 2560**, elegido por su cantidad de pines digitales y su compatibilidad con las librerías de motores, servos y la cámara Sentry Vision 2.
 
 ### Sistema de Tracción
 
-El sistema de propulsión utiliza motores **DG01D con caja reductora 48:1**, conectados al driver de motor **L298N**. Esta combinación proporciona suficiente torque para mantener la velocidad en el circuito mientras el L298N gestiona la dirección y velocidad del motor mediante señales PWM desde el Arduino.
+Motor **DC con caja reductora**, controlado por el driver **L298N**:
 
-Conexiones del driver L298N:
-- **ENA** → Pin 12 (control de velocidad PWM)
-- **IN1** → Pin 11
-- **IN2** → Pin 10
-- **VS (+12V)** → Batería principal
-- **GND** → Tierra común
+| Conexión | Pin |
+|---|---|
+| ENA (velocidad PWM) | 12 |
+| IN1 | 11 |
+| IN2 | 10 |
+| VS (+) | Batería principal |
+| GND | Tierra común |
 
 ### Sistema de Dirección
 
-La dirección delantera es controlada por un **servomotor SG90** conectado al pin 9 del Arduino. El servo mueve ambas ruedas delanteras simultáneamente a través de un varillaje mecánico. Los ángulos calibrados son:
+Servomotor **SG90** en el pin **9**, que mueve ambas ruedas delanteras mediante un varillaje mecánico. El servo se centra como primera operación absoluta en el `setup()` (con un delay de 1000ms) para evitar cualquier deriva al encender el vehículo.
 
-- **Centro (recto):** 90°
-- **Máximo izquierda:** 40°
-- **Máximo derecha:** 140°
+| Ángulo | Open Challenge | Obstacle Challenge |
+|---|:---:|:---:|
+| Centro | 93° | 94° |
+| Máximo izquierda | 46° | 46° |
+| Máximo derecha | 140° | 140° |
 
-Una regla fundamental en nuestro código es que el servo se inicializa y centra en 90° como la primera operación absoluta en el `setup()`, con un delay de 1000ms, para evitar cualquier deriva al encender el vehículo.
+### Sensores Ultrasónicos — HC-SR04
 
-### Sensores de Distancia — Ultrasonicos HC-SR04
-
-Utilizamos **cuatro sensores ultrasónicos HC-SR04** para medir distancias en las cuatro direcciones cardinales. Esto le permite al vehículo detectar paredes, esquinas y la apertura del corredor interior en cada giro.
+Usamos **dos sensores ultrasónicos**, uno a cada lado del vehículo, para detectar la apertura del corredor en cada esquina:
 
 | Sensor | Trig | Echo |
-|--------|------|------|
-| Frontal | 30 | 32 |
+|---|:---:|:---:|
 | Izquierdo | 24 | 22 |
 | Derecho | 50 | 52 |
-| Trasero | 28 | 26 |
 
-El sensor izquierdo y derecho son los más críticos para la lógica de detección de esquinas. Cuando el vehículo se aproxima a un giro, el sensor del lado interior del circuito detecta que la pared se aleja (de ~42 cm a ~238 cm), lo cual activa el giro. El umbral de detección establecido es de **120 cm**.
+El umbral de detección de esquina es **92 cm**: cuando la distancia lateral supera ese valor, el corredor interior se abrió y es momento de girar.
 
-### Sensor de Color — TCS3200
+### Cámara de Visión — Sentry Vision 2 (Tosee Intelligence)
 
-Un sensor de color **TCS3200** está montado en la parte inferior del vehículo, apuntando hacia el suelo, para detectar las líneas naranjas y azules del circuito. Estas líneas se usan para contar las vueltas completadas.
+Comunicada por **I2C** (pines por defecto del Mega: SDA 20, SCL 21), detecta blobs de color entrenados para reconocer los pilares del Obstacle Challenge:
 
-Conexiones:
-- S0 → 34, S1 → 36, S2 → 38, S3 → 40, OUT → 42
-
-Valores de calibración confirmados sobre el tapete real de competencia:
-
-| Superficie | R | G | B |
-|------------|---|---|---|
-| Blanco | ~21 | ~23 | ~7 |
-| Naranja | ~24 | ~51 | ~13 |
-| Azul | ~90 | ~93 | ~24 |
-
-Umbrales de detección:
-- **Naranja:** `G > 35 AND R < 40`
-- **Azul:** `G > 70`
-
-### Cámara de Visión — Keyestudio Sentry Vision 2
-
-La **Keyestudio Sentry Vision 2** es una cámara de visión artificial con procesamiento interno que se comunica con el Arduino via **I2C** (SDA → pin 20, SCL → pin 21). Funciona en modo de detección de blobs de color y fue entrenada con dos colores personalizados:
-
-- **Label 13** → Pilar rojo
-- **Label 14** → Pilar verde
-
-La cámara retorna el label del objeto detectado y su posición horizontal X (0–100) dentro del campo de visión, lo que permite al vehículo saber en qué lado de la cámara está el pilar y reaccionar correspondientemente.
+- **Label 13** → Pilar rojo → el robot lo pasa por la izquierda
+- **Label 14** → Pilar verde → el robot lo pasa por la derecha
 
 ### Sistema de Alimentación
 
-El vehículo opera con **una sola batería de 7.4V** distribuida a través de un riel de breadboard:
+Una sola **batería Elegoo 2000mAh 7.4V**, distribuida por un riel de breadboard:
 
-- Batería + → L298N VS (alimentación motores)
-- Batería + → Arduino VIN (alimentación lógica)
-- Batería − → L298N GND y Arduino GND (tierra común)
+- Batería (+) → L298N VS y Arduino VIN
+- Batería (−) → L298N GND y Arduino GND (tierra común)
 
-El regulador interno del Arduino Mega convierte los 7.4V a 5V estables para alimentar todos los sensores conectados a sus pines de 5V y GND.
+El regulador interno del Arduino Mega convierte los 7.4V a 5V para los sensores.
+
+Ver el diagrama completo en [`schemes/Circuit Final.png`](<schemes/Circuit%20Final.png>).
 
 ---
 
 ## Arquitectura de Software
 
-Todo el software de control está escrito en **C++ para Arduino IDE** y se encuentra en la carpeta `src`. El código fue desarrollado de forma iterativa con múltiples prototipos de diagnóstico antes de llegar al código final de competencia.
+Todo el software está escrito en **C++ para Arduino IDE** ([`src`](src)). Ambos programas finales comparten la misma base de lectura de sensores y control de motor, pero cada uno resuelve un desafío distinto.
 
-### Open Challenge
+### Final Open Challenge
 
-El código del Open Challenge (`open_challenge_auto.ino`) navega el circuito de forma autónoma usando únicamente los sensores ultrasónicos y el sensor de color. Las características principales son:
+[`Final Open Challenge.ino`](src/Final%20Open%20Challenge.ino) navega el circuito usando solo los dos sensores ultrasónicos:
 
-**Detección automática de dirección:** El vehículo no necesita configuración manual para saber si el circuito es en sentido horario (CW) o antihorario (CCW). Al detectar la primera esquina, determina automáticamente la dirección y desactiva el sensor opuesto para el resto de la carrera, evitando giros incorrectos.
+- **Detección automática de dirección:** en la primera esquina detectada, el robot decide si el circuito es CW o CCW y desactiva el sensor opuesto por el resto de la carrera — evita giros incorrectos por lecturas cruzadas.
+- **Giro por tiempo mínimo (875ms):** al detectar una esquina, el servo gira y se mantiene ese tiempo mínimo antes de volver a evaluar, evitando abandonar el giro por un falso positivo.
+- **Cooldown de 1500ms** entre esquinas, para no re-detectar el mismo hueco dos veces.
+- **Parada automática:** cuenta los giros (esquinas) completados; al llegar a **12** (3 vueltas × 4 esquinas), espera 900ms y se detiene por completo.
 
-**Detección de esquinas por sensor lateral:** En lugar de usar el sensor frontal (que puede confundirse con los pilares del Obstacle Challenge), usamos el sensor lateral. Cuando la distancia lateral supera 120 cm, significa que el corredor interior se abrió y es momento de girar.
+### Final Obstacle Challenge
 
-**Lógica de giro con commit mínimo:** Al detectar una esquina, el servo se fija a 40° o 140° durante un mínimo de 900ms antes de verificar si la pared regresó. Esto evita que el robot abandone el giro prematuramente al ver un falso positivo del sensor.
+[`Final Obstacle Challenge.ino`](src/Final%20Obstacle%20Challenge.ino) toma la misma base de navegación y agrega:
 
-**Cooldown entre esquinas:** Después de cada giro hay un período de cooldown de 650ms durante el cual el sensor lateral no puede activar otro giro. Esto previene que el robot detecte el hueco de donde vino y gire de nuevo incorrectamente.
-
-**Conteo de vueltas:** El sensor de color TCS3200 cuenta las líneas naranjas del circuito. Cada vuelta cruza 4 líneas naranjas, por lo tanto 3 vueltas = 12 cruces de naranja. Al detectar el cruce número 12, el robot espera 250ms y se detiene.
-
-### Obstacle Challenge
-
-El código del Obstacle Challenge (`obstacle_challenge_test.ino`) incorpora toda la lógica del Open Challenge y agrega la detección y evasión de pilares mediante la cámara Sentry Vision 2:
-
-- **Pilar rojo (label 13):** El robot debe pasarlo por la derecha → giro a la derecha por 300ms
-- **Pilar verde (label 14):** El robot debe pasarlo por la izquierda → giro a la izquierda por 300ms
-
-La detección de pilares se ejecuta en cada ciclo del loop, con prioridad sobre la lógica de esquinas, garantizando una reacción inmediata al detectar un obstáculo.
+- **Detección de dirección al arrancar:** revisa qué pared está pegada al robot (< 10cm) para saber si debe salir del estacionamiento en sentido CW o CCW.
+- **Maniobra de salida de estacionamiento:** secuencia de 3 fases (reversa, avance, avance lento) calibrada para cada sentido.
+- **Esquinas con revisión de pilar a media vuelta:** el robot gira la primera mitad, se detiene 600ms para consultar la cámara, y según lo que detecta (pilar rojo, verde, o nada) completa el giro con una corrección distinta.
+- **Ajuste en línea recta:** si detecta un pilar fuera de una esquina, hace un pequeño barrido de dirección para esquivarlo sin frenar.
+- **Parada automática:** igual que el Open Challenge, cuenta esquinas y se detiene tras 12, con 500ms de espera.
 
 ---
 
-## Librerías Externas
+## Errores que Encontramos y Cómo los Resolvimos
 
-| Librería | Propósito | Fuente |
-|----------|-----------|--------|
-| `Servo.h` | Control del servo SG90 | Built-in Arduino IDE |
-| `Wire.h` | Comunicación I2C con Sentry2 | Built-in Arduino IDE |
-| `Sentry.h` | Detección de blobs con Sentry Vision 2 | Tosee Intelligence — Library Manager |
+### 1. Interferencia (cross-talk) entre los sensores ultrasónicos
+
+Al hacer sonar los dos sensores HC-SR04 seguidos, uno captaba el eco del otro, produciendo una lectura falsa de ~57cm justo en el hueco que debía activar el giro — el robot no doblaba cuando debía. **Solución:** una vez que la dirección del circuito queda fijada, el sensor opuesto se desactiva por completo y solo se lee el sensor del lado activo, eliminando la interferencia.
+
+### 2. El conteo de vueltas por sensor de color resultó innecesario
+
+Durante el desarrollo probamos y calibramos un sensor de color **TCS3200** (ver [`material`](material)) para contar las líneas naranjas del circuito y así saber cuándo detenerse. En la versión final decidimos reemplazar ese método: contar directamente las esquinas detectadas por los sensores ultrasónicos (12 esquinas = 3 vueltas) es más simple, no depende de la calibración de color bajo distintas luces, y usa un sensor que el robot ya necesitaba de todas formas.
+
+### 3. Varias iteraciones de chasis antes del diseño final
+
+Probamos e imprimimos varias piezas de chasis descargadas y modificadas antes de definir el diseño propio. Los archivos de esas iteraciones descartadas fueron eliminados del repositorio y solo se conservan el [`Prototype Chassis.stl`](models/Prototype%20Chassis.stl) y el diseño final, [`WRO Volt Chasis.stl`](models/WRO%20Volt%20Chasis.stl).
+
+### 4. Lista de materiales incorrecta
+
+La primera versión de nuestra lista de materiales ([`material`](material)) tenía componentes que en realidad no usamos (batería LiPo genérica, portapilas 18650, indicador de voltaje LED, sistema Ackermann como ítem aparte). La corregimos para reflejar exactamente lo que lleva "Volt": batería Elegoo 2000mAh 7.4V, chasis impreso en 3D, ruedas, protoboard e interruptor.
+
+### 5. Recalibración de ángulos del servo
+
+Entre versiones intermedias y la final ajustamos el centro del servo (de 90° a 93°/94° según el desafío) y el ángulo máximo hacia la izquierda (de 40° a 46°) para corregir una leve asimetría en el varillaje de dirección detectada durante las pruebas físicas.
 
 ---
 
-## Proceso de Desarrollo
+## Videos de Rendimiento
 
-Nuestro proceso de desarrollo siguió una metodología iterativa con las siguientes etapas:
+| Desafío | Video |
+|---|---|
+| Open Challenge | [Ver en YouTube](https://www.youtube.com/shorts/3S9T03eFTFk) |
+| Obstacle Challenge | [Ver en YouTube](https://www.youtube.com/watch?v=1XT1xbffeuU) |
 
-1. **Prototipo de diagnóstico:** Código para verificar cada sensor individualmente — ultrasonicos, servo, sensor de color y cámara
-2. **Calibración de colores:** Script dedicado para obtener valores reales de R, G, B del TCS3200 sobre el tapete de competencia
-3. **Integración de cámara:** Confirmación de que la Sentry Vision 2 detecta correctamente labels 13 (rojo) y 14 (verde)
-4. **Open Challenge v1:** Giro por tiempo fijo → reemplazado por sensor-confirmed turning
-5. **Open Challenge v2:** Detección de esquinas por sensor frontal → reemplazado por sensor lateral (más confiable con pilares presentes)
-6. **Open Challenge final:** Auto-detección de dirección, cooldown, commit mínimo de giro, parada por color
-7. **Obstacle Challenge:** Integración de detección de pilares sobre el código de Open Challenge
+Más detalles en [`video/README.md`](video/README.md).
+
+---
+
+## Instrucciones de Armado
+
+1. **Lista de materiales** — reúne todos los componentes antes de empezar: [`material/`](material)
+2. **Impresión 3D** — imprime las piezas del chasis y soportes con cualquier impresora compatible con STL: [`models/`](models)
+3. **Conexiones eléctricas** — sigue el diagrama esquemático para las conexiones entre Arduino, driver, sensores y batería: [`schemes/Circuit Final.png`](<schemes/Circuit%20Final.png>)
+4. **Cargar el código** — sube [`Final Open Challenge.ino`](src/Final%20Open%20Challenge.ino) o [`Final Obstacle Challenge.ino`](src/Final%20Obstacle%20Challenge.ino) según el desafío, usando Arduino IDE con las librerías `Servo.h`, `Wire.h` y `Sentry.h` (esta última de Tosee Intelligence).
+
+---
+
+## Mejoras Futuras Posibles
+
+- **Distancia lateral con más de un sensor por lado:** un segundo sensor por lado ayudaría a confirmar esquinas y reducir falsos positivos sin depender solo del cooldown por tiempo.
+- **Encoder en el motor de tracción:** permitiría medir distancia recorrida real en vez de depender únicamente de tiempos fijos de giro.
+- **PCB en vez de breadboard:** reduciría el riesgo de cables sueltos y mejoraría la fiabilidad de las conexiones durante el transporte y la competencia.
+- **Rangos de color dinámicos:** si en el futuro se retoma el sensor de color, ajustar los umbrales de detección automáticamente según la luz ambiental lo haría más confiable entre distintos escenarios.
 
 ---
 
 *Desarrollado por TEAM VOLT — WRO Future Engineers 2026 — Lima, Perú*
-
