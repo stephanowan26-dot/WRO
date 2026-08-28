@@ -1,7 +1,6 @@
 # Ingeniería de Materiales — WRO Future Engineers 2026
 
-
-
+![Volt en acción](video/volt-demo.gif)
 
 Este repositorio contiene los materiales de ingeniería del modelo de un vehículo autónomo que participa en la competencia WRO Future Engineers en la temporada 2026.
 
