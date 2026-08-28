@@ -2,7 +2,7 @@
 
 ## Open Challenge
 
-YouTube: https://youtu.be/XXXXXXXX
+YouTube: https://www.youtube.com/shorts/3S9T03eFTFk
 
 The video shows the vehicle driving autonomously during the Open Challenge.
 
