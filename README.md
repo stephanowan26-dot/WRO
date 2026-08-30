@@ -1,8 +1,6 @@
 # Ingeniería de Materiales — WRO Future Engineers 2026
 
-<p align="center">
-  <img src="v-photos/FINAL/Front%20Picture%20Final.png" width="750">
-</p>
+
 
 
 Este repositorio contiene los materiales de ingeniería del modelo de un vehículo autónomo que participa en la competencia WRO Future Engineers en la temporada 2026.
